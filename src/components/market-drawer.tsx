@@ -34,8 +34,8 @@ import { CompanyLogo } from '@/components/company-logo';
 import { pnlColor, pnlSoft, Radius, Type, useColors } from '@/constants/theme';
 import { usePortfolio } from '@/context/portfolio-context';
 import { paletteFor } from '@/lib/donut';
-import { BIST_STOCKS, searchBist, type BistStock } from '@/lib/bist';
-import { formatNumber, formatPct } from '@/lib/format';
+import { formatPct, formatPrice } from '@/lib/format';
+import { MARKETS, searchStocks, type MarketKey, type MarketStock } from '@/lib/markets';
 import { fetchQuotesBatched } from '@/lib/prices';
 import type { AssetKind, RawQuote } from '@/lib/types';
 
@@ -105,10 +105,9 @@ function useVisibleQuotes(seed: Record<string, RawQuote>) {
     quotesRef.current = quotes;
   }, [quotes]);
 
-  const request = useCallback((codes: string[]) => {
+  const request = useCallback((symbols: string[]) => {
     const now = Date.now();
-    for (const code of codes) {
-      const sym = `${code}.IS`;
+    for (const sym of symbols) {
       const have = quotesRef.current[sym] ?? seedRef.current[sym];
       if (!have || now - have.fetchedAt > QUOTE_TTL_MS) pending.current.add(sym);
     }
@@ -135,12 +134,21 @@ function useVisibleQuotes(seed: Record<string, RawQuote>) {
 // ---------------------------------------------------------------------------
 // Bölümler
 
+interface StockItem {
+  key: string;
+  market: MarketKey;
+  stock: MarketStock;
+}
+
 interface MarketSection {
   key: string;
   title: string;
   icon: ReactNode;
   available: boolean;
-  data: BistStock[];
+  market?: MarketKey;
+  /** Başlıkta görünen hisse sayısı. */
+  total?: number;
+  data: StockItem[];
 }
 
 function EtfIcon({ size }: { size: number }) {
@@ -151,15 +159,36 @@ function EtfIcon({ size }: { size: number }) {
   );
 }
 
-const SECTION_DEFS: { key: string; title: string; kind?: AssetKind; available: boolean }[] = [
-  { key: 'bist', title: 'Türk Market', kind: 'bist', available: true },
-  { key: 'us', title: 'ABD Market', kind: 'us', available: false },
-  { key: 'metal', title: 'Emtia', kind: 'metal', available: false },
-  { key: 'fund', title: 'Fon', kind: 'other', available: false },
-  { key: 'etf', title: 'ABD ETF', available: false },
+const SECTION_DEFS: { key: string; title: string; kind?: AssetKind; market?: MarketKey }[] = [
+  { key: 'bist', title: 'Türk Market', kind: 'bist', market: 'bist' },
+  { key: 'us', title: 'ABD Market', kind: 'us', market: 'us' },
+  { key: 'metal', title: 'Emtia', kind: 'metal' },
+  { key: 'fund', title: 'Fon', kind: 'other' },
+  { key: 'etf', title: 'ABD ETF' },
 ];
 
-const BIST_COLORS = paletteFor('bist');
+/** Her piyasanın satır nesneleri bir kez oluşturulur (arama sonuçları da aynı nesneleri kullanır). */
+const itemCache = new Map<MarketKey, { list: StockItem[]; byCode: Map<string, StockItem> }>();
+
+function itemsFor(market: MarketKey) {
+  let entry = itemCache.get(market);
+  if (!entry) {
+    const list = MARKETS[market].stocks.map((stock) => ({ key: `${market}:${stock.code}`, market, stock }));
+    entry = { list, byCode: new Map(list.map((i) => [i.stock.code, i])) };
+    itemCache.set(market, entry);
+  }
+  return entry;
+}
+
+const PALETTES: Record<MarketKey, string[]> = { bist: paletteFor('bist'), us: paletteFor('us') };
+
+/** Logosu olmayan hisseler için koddan sabit bir rozet rengi. */
+function colorFor(market: MarketKey, code: string): string {
+  let h = 0;
+  for (let i = 0; i < code.length; i++) h = (h * 31 + code.charCodeAt(i)) >>> 0;
+  const palette = PALETTES[market];
+  return palette[h % palette.length];
+}
 
 function MarketDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
   const c = useColors();
@@ -174,7 +203,8 @@ function MarketDrawer({ open, onClose }: { open: boolean; onClose: () => void })
   if (open && !mounted) setMounted(true);
   const [progress] = useState(() => new Animated.Value(0));
   const [query, setQuery] = useState('');
-  const [expanded, setExpanded] = useState<string | null>('bist');
+  // Açılışta bölümler kapalı; dokunulan bölüm aşağı doğru açılır (aynı anda tek bölüm açık).
+  const [expanded, setExpanded] = useState<string | null>(null);
 
   // Aç/kapa animasyonu
   useEffect(() => {
@@ -212,21 +242,35 @@ function MarketDrawer({ open, onClose }: { open: boolean; onClose: () => void })
   );
 
   const searching = query.trim().length > 0;
-  const results = useMemo(() => (searching ? searchBist(query) : BIST_STOCKS), [query, searching]);
+  // Arama her iki piyasada birden yapılır.
+  const results = useMemo<Record<MarketKey, MarketStock[]> | null>(
+    () =>
+      searching ? { bist: searchStocks(query, MARKETS.bist.stocks), us: searchStocks(query, MARKETS.us.stocks) } : null,
+    [query, searching],
+  );
+  const noResults = results != null && results.bist.length === 0 && results.us.length === 0;
 
-  const sections: MarketSection[] = SECTION_DEFS.filter((d) => !searching || d.key === 'bist').map((d) => ({
-    key: d.key,
-    title: d.title,
-    available: d.available,
-    icon: d.kind ? <CategoryIcon kind={d.kind} size={30} /> : <EtfIcon size={30} />,
-    data: d.key === 'bist' && (searching || expanded === 'bist') ? (results as BistStock[]) : [],
-  }));
-
-  const colorFor = useCallback((code: string) => {
-    let h = 0;
-    for (let i = 0; i < code.length; i++) h = (h * 31 + code.charCodeAt(i)) >>> 0;
-    return BIST_COLORS[h % BIST_COLORS.length];
-  }, []);
+  const sections: MarketSection[] = SECTION_DEFS.filter(
+    (d) => !results || (d.market && results[d.market].length > 0),
+  ).map((d) => {
+    const m = d.market;
+    let data: StockItem[] = [];
+    if (m && results) {
+      const { byCode } = itemsFor(m);
+      data = results[m].map((stock) => byCode.get(stock.code)!);
+    } else if (m && expanded === d.key) {
+      data = itemsFor(m).list;
+    }
+    return {
+      key: d.key,
+      title: d.title,
+      available: m != null,
+      market: m,
+      icon: d.kind ? <CategoryIcon kind={d.kind} size={30} /> : <EtfIcon size={30} />,
+      total: m ? (results ? results[m].length : MARKETS[m].stocks.length) : undefined,
+      data,
+    };
+  });
 
   const requestRef = useRef(request);
   useEffect(() => {
@@ -234,23 +278,32 @@ function MarketDrawer({ open, onClose }: { open: boolean; onClose: () => void })
   }, [request]);
   // FlatList bu geri çağırmanın hiç değişmemesini ister.
   const onViewable = useCallback(({ viewableItems }: { viewableItems: ListViewToken[] }) => {
-    const codes = viewableItems.map((v) => (v.item as BistStock | undefined)?.code).filter(Boolean) as string[];
-    if (codes.length) requestRef.current(codes);
+    const symbols: string[] = [];
+    for (const v of viewableItems) {
+      const item = v.item as StockItem | undefined;
+      if (item?.stock) symbols.push(MARKETS[item.market].quoteSymbol(item.stock.code));
+    }
+    if (symbols.length) requestRef.current(symbols);
   }, []);
 
   const openStock = useCallback(
-    (code: string) => {
+    (market: MarketKey, code: string) => {
       onClose();
-      router.push({ pathname: '/add', params: { kind: 'bist', symbol: code } });
+      router.push({ pathname: '/add', params: { kind: MARKETS[market].kind, symbol: code } });
     },
     [onClose],
   );
 
+  // Listede olmayan bir kod yazıldıysa yine de eklenebilsin.
   const fallbackCode = query
     .trim()
     .toUpperCase()
-    .replace(/[^A-Z0-9]/g, '');
-  const showFallback = searching && results.length === 0 && /^[A-Z0-9]{3,6}$/.test(fallbackCode);
+    .replace(/[^A-Z0-9.]/g, '');
+  const fallbackMarkets = noResults
+    ? (['bist', 'us'] as MarketKey[]).filter((m) =>
+        m === 'bist' ? /^[A-Z0-9]{3,6}$/.test(fallbackCode) : /^[A-Z]{1,5}(\.[A-Z])?$/.test(fallbackCode),
+      )
+    : [];
 
   if (!mounted) return null;
 
@@ -307,7 +360,7 @@ function MarketDrawer({ open, onClose }: { open: boolean; onClose: () => void })
 
         <SectionList
           sections={sections}
-          keyExtractor={(item) => item.code}
+          keyExtractor={(item) => item.key}
           stickySectionHeadersEnabled
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
@@ -321,30 +374,29 @@ function MarketDrawer({ open, onClose }: { open: boolean; onClose: () => void })
             <SectionHeader
               section={section as MarketSection}
               expanded={searching || expanded === section.key}
-              count={section.key === 'bist' ? (searching ? results.length : BIST_STOCKS.length) : undefined}
+              count={(section as MarketSection).total}
               onPress={() => {
                 if (!section.available || searching) return;
                 setExpanded((prev) => (prev === section.key ? null : section.key));
               }}
             />
           )}
-          renderItem={({ item }) => (
-            <StockRow
-              stock={item}
-              quote={quotes[`${item.code}.IS`] ?? portfolioQuotes[`${item.code}.IS`]}
-              color={colorFor(item.code)}
-              onPress={openStock}
-            />
-          )}
+          renderItem={({ item }) => {
+            const sym = MARKETS[item.market].quoteSymbol(item.stock.code);
+            return <StockRow item={item} quote={quotes[sym] ?? portfolioQuotes[sym]} onPress={openStock} />;
+          }}
           ListFooterComponent={
-            showFallback ? (
-              <Pressable onPress={() => openStock(fallbackCode)} style={styles.fallback} accessibilityRole="button">
-                <Text style={[Type.body, { color: c.textSecondary }]}>
-                  Listede yok. <Text style={{ color: c.link }}>{fallbackCode} kodunu ekle ›</Text>
-                </Text>
-              </Pressable>
-            ) : searching && results.length === 0 ? (
-              <Text style={[Type.body, styles.fallback, { color: c.textSecondary }]}>Sonuç bulunamadı.</Text>
+            noResults ? (
+              <View style={styles.fallback}>
+                <Text style={[Type.body, { color: c.textSecondary }]}>Sonuç bulunamadı.</Text>
+                {fallbackMarkets.map((m) => (
+                  <Pressable key={m} onPress={() => openStock(m, fallbackCode)} hitSlop={6} accessibilityRole="button">
+                    <Text style={[Type.bodyStrong, styles.fallbackLink, { color: c.link }]}>
+                      {`${fallbackCode} kodunu ${MARKETS[m].title}'e ekle ›`}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
             ) : undefined
           }
         />
@@ -407,28 +459,27 @@ function SectionHeader({
 }
 
 const StockRow = memo(function StockRow({
-  stock,
+  item,
   quote,
-  color,
   onPress,
 }: {
-  stock: BistStock;
+  item: StockItem;
   quote?: RawQuote;
-  color: string;
-  onPress: (code: string) => void;
+  onPress: (market: MarketKey, code: string) => void;
 }) {
   const c = useColors();
+  const { stock, market } = item;
   const change =
     quote?.previousClose != null && quote.previousClose > 0
       ? ((quote.price - quote.previousClose) / quote.previousClose) * 100
       : undefined;
   return (
     <Pressable
-      onPress={() => onPress(stock.code)}
+      onPress={() => onPress(market, stock.code)}
       accessibilityRole="button"
       accessibilityLabel={`${stock.code} ${stock.name}`}
       style={({ pressed }) => [styles.stockRow, pressed && { backgroundColor: c.card }]}>
-      <CompanyLogo code={stock.code} label={stock.code} color={color} size={36} />
+      <CompanyLogo website={stock.website} label={stock.code} color={colorFor(market, stock.code)} size={36} />
       <View style={styles.stockMain}>
         <Text style={[Type.headline, { color: c.text, fontSize: 15 }]} numberOfLines={1}>
           {stock.code}
@@ -438,7 +489,7 @@ const StockRow = memo(function StockRow({
         </Text>
       </View>
       <Text style={[Type.number, styles.price, { color: quote ? c.text : c.textTertiary }]} numberOfLines={1}>
-        {quote ? formatNumber(quote.price, 2, 2) : '—'}
+        {quote ? formatPrice(quote.price, MARKETS[market].currency) : '—'}
       </Text>
       <View style={[styles.change, { backgroundColor: change != null ? pnlSoft(c, change) : c.chip }]}>
         <Text
@@ -534,7 +585,7 @@ const styles = StyleSheet.create({
   },
   price: {
     fontSize: 14,
-    minWidth: 60,
+    minWidth: 66,
     textAlign: 'right',
   },
   change: {
@@ -550,5 +601,9 @@ const styles = StyleSheet.create({
   fallback: {
     paddingHorizontal: 16,
     paddingVertical: 16,
+    gap: 10,
+  },
+  fallbackLink: {
+    fontSize: 14,
   },
 });

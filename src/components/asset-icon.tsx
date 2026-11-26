@@ -3,7 +3,7 @@ import { Platform, Text, View } from 'react-native';
 
 import { CompanyLogo } from '@/components/company-logo';
 import { Font, useColors } from '@/constants/theme';
-import { bistInfo } from '@/lib/bist';
+import { stockInfo } from '@/lib/markets';
 import Svg, {
   Circle,
   ClipPath,
@@ -301,20 +301,20 @@ export function AssetIcon({
   /** Logo/bayrak/külçe simgelerinin etrafına dilim rengiyle halka çizer. */
   ring?: boolean;
 }) {
-  const logo = kind === 'bist' && bistInfo(symbol)?.website != null;
+  const website = stockInfo(kind, symbol)?.website;
+  const logo = website != null;
   const pictured = logo || kind === 'metal' || (kind === 'fx' && FLAGS[symbol] != null);
   if (pictured) {
     const inner = ring ? size - 7 : size;
-    const icon =
-      kind === 'bist' ? (
-        <CompanyLogo code={symbol} label={label} color={color} size={inner} />
-      ) : kind === 'metal' ? (
-        <Round size={inner}>
-          <Bullion metal={symbol === 'GRAM_GUMUS' ? 'silver' : 'gold'} />
-        </Round>
-      ) : (
-        <PairIcon main={symbol} second="TR" size={inner} />
-      );
+    const icon = logo ? (
+      <CompanyLogo website={website} label={label} color={color} size={inner} />
+    ) : kind === 'metal' ? (
+      <Round size={inner}>
+        <Bullion metal={symbol === 'GRAM_GUMUS' ? 'silver' : 'gold'} />
+      </Round>
+    ) : (
+      <PairIcon main={symbol} second="TR" size={inner} />
+    );
     if (!ring) return icon;
     return (
       <View

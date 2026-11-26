@@ -138,6 +138,7 @@ export function normalizeSymbol(kind: AssetKind, input: string): string {
   if (kind === 'other') return input.trim().toUpperCase().replace(/\s+/g, ' ');
   let s = input.trim().toUpperCase().replace(/\s+/g, '');
   if (kind === 'bist') s = s.replace(/\.IS$/, '');
+  if (kind === 'us') s = s.replace(/^([A-Z]{1,5})[-/]([A-Z])$/, '$1.$2');
   if (kind === 'crypto') s = s.replace(/-?USDT?$/, '') || s;
   return s;
 }
@@ -148,7 +149,8 @@ export function quoteSymbolFor(kind: AssetKind, symbol: string): string | null {
     case 'bist':
       return `${symbol}.IS`;
     case 'us':
-      return symbol;
+      // Hisse sınıfları: BRK.B → BRK-B (Yahoo biçimi)
+      return symbol.replace(/\./g, '-');
     case 'crypto':
       return `${symbol}-USD`;
     case 'fx':

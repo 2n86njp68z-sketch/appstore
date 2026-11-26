@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Image, StyleSheet, Text, View } from 'react-native';
 
 import { Font } from '@/constants/theme';
-import { bistInfo, logoCandidates } from '@/lib/bist';
+import { logoCandidates } from '@/lib/markets';
 
 /** Hangi sitenin kaçıncı aday adresinde logo bulunduğunu hatırlar (-1: bulunamadı). */
 const found = new Map<string, number>();
@@ -23,22 +23,22 @@ function LetterAvatar({ label, color, size }: { label: string; color: string; si
  * bulunamazsa harf rozeti görünür.
  */
 export function CompanyLogo({
-  code,
+  website,
   label,
   color,
   size,
 }: {
-  code: string;
-  label?: string;
+  /** Şirketin internet adresi; yoksa doğrudan harf rozeti. */
+  website?: string;
+  label: string;
   color: string;
   size: number;
 }) {
-  const website = bistInfo(code)?.website;
   const candidates = website ? logoCandidates(website) : [];
   const known = website ? found.get(website) : undefined;
   const [index, setIndex] = useState(known ?? 0);
   const [loaded, setLoaded] = useState(false);
-  const letter = <LetterAvatar label={label ?? code} color={color} size={size} />;
+  const letter = <LetterAvatar label={label} color={color} size={size} />;
 
   if (!website || index < 0 || index >= candidates.length) return letter;
 
