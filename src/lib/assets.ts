@@ -44,11 +44,11 @@ export const ASSET_KINDS: AssetKindInfo[] = [
   { kind: 'fx', label: 'Döviz', shortLabel: 'Döviz', currency: 'TRY', quantityLabel: 'Miktar', color: '#14B8A6' },
   {
     kind: 'metal',
-    label: 'Altın & Gümüş',
-    shortLabel: 'Altın',
+    label: 'Emtia',
+    shortLabel: 'Emtia',
     currency: 'TRY',
     quantityLabel: 'Gram',
-    color: '#CA8A04',
+    color: '#EAB308',
   },
   {
     kind: 'other',
@@ -59,6 +59,26 @@ export const ASSET_KINDS: AssetKindInfo[] = [
     placeholder: 'Fon kodu, örn. AFT',
     color: '#64748B',
   },
+];
+
+/** Bir dilim açıldığında içindeki varlıklara verilen renkler (sırayla). */
+export const SLICE_PALETTE = [
+  '#3B82F6',
+  '#06B6D4',
+  '#10B981',
+  '#F43F5E',
+  '#F59E0B',
+  '#8B5CF6',
+  '#EC4899',
+  '#84CC16',
+  '#6366F1',
+  '#EF4444',
+  '#14B8A6',
+  '#F97316',
+  '#0EA5E9',
+  '#A855F7',
+  '#22C55E',
+  '#EAB308',
 ];
 
 const KIND_MAP = Object.fromEntries(ASSET_KINDS.map((k) => [k.kind, k])) as Record<AssetKind, AssetKindInfo>;

@@ -5,19 +5,21 @@ Expo (React Native) ile yazıldı. Geliştirmek ve App Store'a göndermek için 
 
 ## Özellikler
 
+- **Halka grafik:** Ana sayfanın ortasında portföy türlere göre (BIST, ABD, Emtia…) dilim dilim görünür.
+  - Bir dilime dokununca o dilim yerinde içindeki varlıklara ayrılır, her biri farklı renkte. Diğer dilimler soluklaşır.
+  - Ayrılan bir varlığa dokununca ortada onun değeri yazar. Ortaya dokununca geri dönülür.
 - **Portföy özeti:** Toplam değer (TL), toplam kâr/zarar, günlük değişim
-- **Dağılım çubuğu:** Varlık türlerine göre yüzdeler
 - **Varlık türleri:**
   - BIST hisse (THYAO, ASELS…)
   - ABD hisse (AAPL…)
   - Kripto (BTC, ETH…)
   - Döviz (USD, EUR, GBP, CHF)
-  - Gram altın ve gram gümüş
+  - Emtia: gram altın ve gram gümüş
   - "Diğer": fiyatını elle girdiğin fon, mevduat vb.
 - **Alış/satış kaydı:** Ortalama maliyet ve gerçekleşen kâr/zarar hesaplanır
 - **Fiyatlar:** Otomatik çekilir. Aşağı çekince ve uygulama öne gelince yenilenir.
 - **Kayıt:** Veriler yalnızca telefonda tutulur. Hesap ya da sunucu gerekmez.
-- **Görünüm:** Açık ve koyu tema
+- **Görünüm:** Telefonun ayarına göre gündüz beyaz, gece siyah
 
 ## Proje yapısı
 
@@ -25,13 +27,16 @@ Expo (React Native) ile yazıldı. Geliştirmek ve App Store'a göndermek için 
 src/
   app/                  Ekranlar (Expo Router)
     _layout.tsx         Gezinme ve tema
-    index.tsx           Ana sayfa: özet + varlık listesi
+    index.tsx           Ana sayfa: halka grafik + liste
     add.tsx             İşlem ekleme
     asset/[key].tsx     Varlık detayı ve işlem geçmişi
-  components/ui.tsx     Ortak bileşenler (kart, buton, dağılım çubuğu…)
+  components/
+    donut-chart.tsx     Dokunulabilir halka grafik
+    ui.tsx              Ortak bileşenler (kart, buton…)
   context/              Uygulama durumu, kayıt ve fiyat yenileme
   lib/
     portfolio.ts        Hesaplamalar (ortalama maliyet, K/Z, toplamlar)
+    donut.ts            Grafik dilimleri, renkler ve dokunma hesabı
     prices.ts           Fiyat çekme (Yahoo Finance)
     format.ts           Türkçe sayı/tarih biçimleri
     assets.ts           Varlık türleri ve semboller

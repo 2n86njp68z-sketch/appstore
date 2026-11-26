@@ -1,18 +1,77 @@
+import * as Haptics from 'expo-haptics';
 import { Stack, router } from 'expo-router';
-import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useMemo, useState } from 'react';
+import {
+  ActivityIndicator,
+  Platform,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+  useWindowDimensions,
+} from 'react-native';
 
-import { AllocationBar, Card, PrimaryButton, SectionTitle } from '@/components/ui';
+import { DonutChart } from '@/components/donut-chart';
+import { PrimaryButton } from '@/components/ui';
 import { pnlColor, useColors } from '@/constants/theme';
 import { usePortfolio } from '@/context/portfolio-context';
 import { displaySymbol, kindInfo, quantityUnit } from '@/lib/assets';
+import { buildChartData, type ChartAsset, type ChartCategory, type DonutHit } from '@/lib/donut';
 import { formatMoney, formatPct, formatPrice, formatQuantity, formatTime } from '@/lib/format';
-import type { Holding } from '@/lib/types';
+import type { AssetKind, Holding } from '@/lib/types';
+
+function tick() {
+  if (Platform.OS !== 'web') Haptics.selectionAsync().catch(() => {});
+}
 
 export default function PortfolioScreen() {
   const c = useColors();
+  const { width } = useWindowDimensions();
   const { ready, holdings, summary, refreshing, refresh, lastUpdated, error } = usePortfolio();
-  const open = holdings.filter((h) => h.quantity > 0);
+  const [openKind, setOpenKind] = useState<AssetKind>();
+  const [selectedAsset, setSelectedAsset] = useState<string>();
+
+  const categories = useMemo(() => buildChartData(holdings, summary), [holdings, summary]);
+  // Açık tür portföyden kalktıysa (ör. hepsi satıldıysa) kapalı say.
+  const openCat = categories.find((x) => x.kind === openKind);
+  const activeKind = openCat?.kind;
+  const selected = openCat?.assets.find((a) => a.key === selectedAsset);
   const closed = holdings.filter((h) => h.quantity <= 0);
+  const chartSize = Math.min(width - 32, 340);
+
+  function openCategory(kind: AssetKind) {
+    tick();
+    setOpenKind(kind);
+    setSelectedAsset(undefined);
+  }
+
+  function closeAll() {
+    if (!activeKind) return;
+    tick();
+    setOpenKind(undefined);
+    setSelectedAsset(undefined);
+  }
+
+  function onChartTap(hit: DonutHit) {
+    if (hit.type === 'slice') {
+      const s = hit.slice;
+      if (s.kind !== activeKind) return openCategory(s.kind);
+      if (s.assetKey) {
+        tick();
+        setSelectedAsset((prev) => (prev === s.assetKey ? undefined : s.assetKey));
+      }
+      return;
+    }
+    // Ortaya dokunmak bir seviye geri gider, dışarıya dokunmak her şeyi kapatır.
+    if (hit.type === 'center' && selected) {
+      tick();
+      setSelectedAsset(undefined);
+      return;
+    }
+    closeAll();
+  }
 
   return (
     <>
@@ -41,34 +100,6 @@ export default function PortfolioScreen() {
           <EmptyState />
         ) : (
           <>
-            <View style={[styles.hero, { backgroundColor: c.hero }]}>
-              <Text style={[styles.heroLabel, { color: c.heroMuted }]}>Toplam Değer</Text>
-              <Text style={[styles.heroValue, { color: c.heroText }]} adjustsFontSizeToFit numberOfLines={1}>
-                {formatMoney(summary.valueTry, 'TRY')}
-              </Text>
-              <View style={styles.heroRow}>
-                <HeroStat
-                  label="Toplam K/Z"
-                  value={formatMoney(summary.pnlTry, 'TRY', { signed: true })}
-                  sub={formatPct(summary.pnlPct)}
-                  color={pnlColor(c, summary.pnlTry, c.heroMuted)}
-                />
-                <HeroStat
-                  label="Bugün"
-                  value={formatMoney(summary.dayChangeTry, 'TRY', { signed: true })}
-                  sub={formatPct(summary.dayChangePct)}
-                  color={pnlColor(c, summary.dayChangeTry, c.heroMuted)}
-                />
-              </View>
-              <Text style={[styles.updated, { color: c.heroMuted }]}>
-                {refreshing
-                  ? 'Fiyatlar güncelleniyor…'
-                  : lastUpdated
-                    ? `Son güncelleme ${formatTime(lastUpdated)}`
-                    : 'Fiyat bekleniyor'}
-              </Text>
-            </View>
-
             {(error || summary.incomplete) && (
               <View style={[styles.banner, { backgroundColor: c.warningBg }]}>
                 <Text style={[styles.bannerText, { color: c.warning }]}>
@@ -77,38 +108,98 @@ export default function PortfolioScreen() {
               </View>
             )}
 
-            {summary.allocation.length > 1 && (
-              <>
-                <SectionTitle>Dağılım</SectionTitle>
-                <Card>
-                  <AllocationBar slices={summary.allocation} />
-                </Card>
-              </>
+            {categories.length > 0 && (
+              <View style={styles.chartWrap}>
+                <DonutChart
+                  categories={categories}
+                  openKind={activeKind}
+                  selectedAsset={selected?.key}
+                  size={chartSize}
+                  onTap={onChartTap}>
+                  <CenterLabel
+                    title={selected ? selected.label : openCat ? openCat.label : 'Toplam Değer'}
+                    value={selected ? selected.valueTry : openCat ? openCat.valueTry : summary.valueTry}
+                    sub={
+                      selected
+                        ? `Portföyün ${formatPct(selected.pct, { signed: false })}'i`
+                        : openCat
+                          ? `Portföyün ${formatPct(openCat.pct, { signed: false })}'i`
+                          : formatPct(summary.pnlPct)
+                    }
+                    subColor={selected || openCat ? c.textSecondary : pnlColor(c, summary.pnlTry)}
+                  />
+                </DonutChart>
+                <Text style={[styles.hint, { color: c.textSecondary }]}>
+                  {activeKind ? 'Geri dönmek için ortaya dokun' : 'Ayrıntı için bir dilime dokun'}
+                </Text>
+              </View>
             )}
 
-            <SectionTitle>Varlıklarım</SectionTitle>
-            <Card style={styles.listCard}>
-              {open.map((h, i) => (
-                <HoldingRow key={h.key} holding={h} last={i === open.length - 1} />
-              ))}
-              {open.length === 0 && (
-                <Text style={[styles.muted, { color: c.textSecondary, padding: 16 }]}>Elde varlık yok.</Text>
+            <View style={styles.stats}>
+              <Stat
+                label="Toplam K/Z"
+                value={formatMoney(summary.pnlTry, 'TRY', { signed: true })}
+                sub={formatPct(summary.pnlPct)}
+                color={pnlColor(c, summary.pnlTry)}
+              />
+              <View style={[styles.statDivider, { backgroundColor: c.border }]} />
+              <Stat
+                label="Bugün"
+                value={formatMoney(summary.dayChangeTry, 'TRY', { signed: true })}
+                sub={formatPct(summary.dayChangePct)}
+                color={pnlColor(c, summary.dayChangeTry)}
+              />
+            </View>
+
+            <View style={styles.listHeader}>
+              <Text style={[styles.listTitle, { color: c.text }]}>
+                {openCat ? kindInfo(openCat.kind).label : 'Dağılım'}
+              </Text>
+              {openCat && (
+                <Pressable onPress={closeAll} hitSlop={10} accessibilityRole="button">
+                  <Text style={[styles.link, { color: c.tint }]}>‹ Tüm portföy</Text>
+                </Pressable>
               )}
-            </Card>
+            </View>
 
-            {closed.length > 0 && (
-              <>
-                <SectionTitle>Satılanlar</SectionTitle>
-                <Card style={styles.listCard}>
-                  {closed.map((h, i) => (
-                    <HoldingRow key={h.key} holding={h} last={i === closed.length - 1} />
+            <View>
+              {openCat
+                ? openCat.assets.map((a, i) => (
+                    <AssetRow
+                      key={a.key}
+                      asset={a}
+                      highlighted={a.key === selected?.key}
+                      last={i === openCat.assets.length - 1}
+                    />
+                  ))
+                : categories.map((cat, i) => (
+                    <CategoryRow
+                      key={cat.kind}
+                      category={cat}
+                      last={i === categories.length - 1}
+                      onPress={() => openCategory(cat.kind)}
+                    />
                   ))}
-                </Card>
+            </View>
+
+            {closed.length > 0 && !openCat && (
+              <>
+                <View style={styles.listHeader}>
+                  <Text style={[styles.listTitle, { color: c.text }]}>Satılanlar</Text>
+                </View>
+                {closed.map((h, i) => (
+                  <ClosedRow key={h.key} holding={h} last={i === closed.length - 1} />
+                ))}
               </>
             )}
 
-            <Text style={[styles.disclaimer, { color: c.textSecondary }]}>
-              Fiyatlar gecikmeli olabilir. Bu uygulama yatırım tavsiyesi vermez.
+            <Text style={[styles.footer, { color: c.textSecondary }]}>
+              {refreshing
+                ? 'Fiyatlar güncelleniyor…'
+                : lastUpdated
+                  ? `Son güncelleme ${formatTime(lastUpdated)}`
+                  : 'Fiyat bekleniyor'}
+              {'\n'}Fiyatlar gecikmeli olabilir. Bu uygulama yatırım tavsiyesi vermez.
             </Text>
           </>
         )}
@@ -117,66 +208,145 @@ export default function PortfolioScreen() {
   );
 }
 
-function HeroStat({ label, value, sub, color }: { label: string; value: string; sub: string; color: string }) {
+function CenterLabel({ title, value, sub, subColor }: { title: string; value: number; sub: string; subColor: string }) {
   const c = useColors();
   return (
-    <View style={{ flex: 1 }}>
-      <Text style={[styles.heroStatLabel, { color: c.heroMuted }]}>{label}</Text>
-      <Text style={[styles.heroStatValue, { color }]} numberOfLines={1} adjustsFontSizeToFit>
+    <>
+      <Text style={[styles.centerTitle, { color: c.textSecondary }]} numberOfLines={1}>
+        {title}
+      </Text>
+      <Text style={[styles.centerValue, { color: c.text }]} numberOfLines={1} adjustsFontSizeToFit>
+        {formatMoney(value, 'TRY', { decimals: 0 })}
+      </Text>
+      <Text style={[styles.centerSub, { color: subColor }]} numberOfLines={1}>
+        {sub}
+      </Text>
+    </>
+  );
+}
+
+function Stat({ label, value, sub, color }: { label: string; value: string; sub: string; color: string }) {
+  const c = useColors();
+  return (
+    <View style={styles.stat}>
+      <Text style={[styles.statLabel, { color: c.textSecondary }]}>{label}</Text>
+      <Text style={[styles.statValue, { color }]} numberOfLines={1} adjustsFontSizeToFit>
         {value}
       </Text>
-      <Text style={[styles.heroStatSub, { color }]}>{sub}</Text>
+      <Text style={[styles.statSub, { color }]}>{sub}</Text>
     </View>
   );
 }
 
-function HoldingRow({ holding: h, last }: { holding: Holding; last: boolean }) {
+function Row({
+  color,
+  title,
+  subtitle,
+  pct,
+  value,
+  change,
+  changeColor,
+  last,
+  highlighted,
+  onPress,
+}: {
+  color: string;
+  title: string;
+  subtitle?: string;
+  pct?: string;
+  value: string;
+  change: string;
+  changeColor: string;
+  last: boolean;
+  highlighted?: boolean;
+  onPress: () => void;
+}) {
   const c = useColors();
-  const info = kindInfo(h.kind);
-  const isOpen = h.quantity > 0;
-  const showName = h.name !== h.symbol && h.kind !== 'metal';
   return (
     <Pressable
-      onPress={() => router.push({ pathname: '/asset/[key]', params: { key: h.key } })}
+      onPress={onPress}
       accessibilityRole="button"
-      style={({ pressed }) => [
-        styles.row,
-        !last && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: c.border },
-        pressed && { backgroundColor: c.chip },
-      ]}>
-      <View style={[styles.badge, { backgroundColor: info.color }]}>
-        <Text style={styles.badgeText}>{displaySymbol(h.kind, h.symbol).slice(0, 2)}</Text>
-      </View>
+      style={({ pressed }) => [styles.row, (pressed || highlighted) && { backgroundColor: c.chip }]}>
+      {!last && <View style={[styles.separator, { backgroundColor: c.border }]} />}
+      <View style={[styles.dot, { backgroundColor: color }]} />
       <View style={styles.rowMain}>
         <Text style={[styles.rowTitle, { color: c.text }]} numberOfLines={1}>
-          {displaySymbol(h.kind, h.symbol)}
+          {title}
         </Text>
-        <Text style={[styles.rowSub, { color: c.textSecondary }]} numberOfLines={1}>
-          {isOpen
-            ? `${formatQuantity(h.quantity)} ${quantityUnit(h.kind, h.symbol)} · ${h.priceMissing ? 'fiyat yok' : formatPrice(h.price, h.currency)}`
-            : showName
-              ? h.name
-              : info.label}
-        </Text>
+        {subtitle ? (
+          <Text style={[styles.rowSub, { color: c.textSecondary }]} numberOfLines={1}>
+            {subtitle}
+          </Text>
+        ) : null}
       </View>
+      {pct ? <Text style={[styles.rowPct, { color: c.textSecondary }]}>{pct}</Text> : null}
       <View style={styles.rowRight}>
-        {isOpen ? (
-          <>
-            <Text style={[styles.rowValue, { color: c.text }]}>
-              {h.valueTry != null ? formatMoney(h.valueTry, 'TRY') : formatMoney(h.marketValue, h.currency)}
-            </Text>
-            <Text style={[styles.rowPnl, { color: pnlColor(c, h.unrealizedPnl) }]}>{formatPct(h.unrealizedPct)}</Text>
-          </>
-        ) : (
-          <>
-            <Text style={[styles.rowSub, { color: c.textSecondary }]}>Gerçekleşen</Text>
-            <Text style={[styles.rowPnl, { color: pnlColor(c, h.realizedPnl) }]}>
-              {formatMoney(h.realizedPnl, h.currency, { signed: true })}
-            </Text>
-          </>
-        )}
+        <Text style={[styles.rowValue, { color: c.text }]}>{value}</Text>
+        <Text style={[styles.rowChange, { color: changeColor }]}>{change}</Text>
       </View>
     </Pressable>
+  );
+}
+
+function CategoryRow({
+  category: cat,
+  last,
+  onPress,
+}: {
+  category: ChartCategory;
+  last: boolean;
+  onPress: () => void;
+}) {
+  const c = useColors();
+  return (
+    <Row
+      color={cat.color}
+      title={kindInfo(cat.kind).label}
+      subtitle={`${cat.assets.length} varlık`}
+      pct={formatPct(cat.pct, { signed: false })}
+      value={formatMoney(cat.valueTry, 'TRY', { decimals: 0 })}
+      change={formatPct(cat.pnlPct)}
+      changeColor={pnlColor(c, cat.pnlTry)}
+      last={last}
+      onPress={onPress}
+    />
+  );
+}
+
+function AssetRow({ asset: a, highlighted, last }: { asset: ChartAsset; highlighted: boolean; last: boolean }) {
+  const c = useColors();
+  const h = a.holding;
+  return (
+    <Row
+      color={a.color}
+      title={a.label}
+      subtitle={`${formatQuantity(h.quantity)} ${quantityUnit(h.kind, h.symbol)} · ${
+        h.priceMissing ? 'fiyat yok' : formatPrice(h.price, h.currency)
+      }`}
+      pct={formatPct(a.pct, { signed: false })}
+      value={formatMoney(a.valueTry, 'TRY', { decimals: 0 })}
+      change={formatPct(h.unrealizedPct)}
+      changeColor={pnlColor(c, h.unrealizedPnl)}
+      last={last}
+      highlighted={highlighted}
+      onPress={() => router.push({ pathname: '/asset/[key]', params: { key: a.key } })}
+    />
+  );
+}
+
+function ClosedRow({ holding: h, last }: { holding: Holding; last: boolean }) {
+  const c = useColors();
+  return (
+    <Row
+      color={c.border}
+      title={displaySymbol(h.kind, h.symbol)}
+      subtitle={`${kindInfo(h.kind).label} · gerçekleşen`}
+      value={formatMoney(h.realizedPnl, h.currency, { signed: true })}
+      change=""
+      changeColor={c.textSecondary}
+      last={last}
+      onPress={() => router.push({ pathname: '/asset/[key]', params: { key: h.key } })}
+    />
   );
 }
 
@@ -187,7 +357,7 @@ function EmptyState() {
       <Text style={styles.emptyIcon}>📈</Text>
       <Text style={[styles.emptyTitle, { color: c.text }]}>Portföyün boş</Text>
       <Text style={[styles.emptyText, { color: c.textSecondary }]}>
-        Hisse, kripto, döviz veya altın alımlarını ekle; güncel değerini ve kâr/zararını anlık takip et.
+        Hisse, kripto, döviz veya emtia alımlarını ekle; güncel değerini ve kâr/zararını anlık takip et.
       </Text>
       <View style={{ alignSelf: 'stretch', marginTop: 8 }}>
         <PrimaryButton label="İlk işlemini ekle" onPress={() => router.push('/add')} />
@@ -198,9 +368,9 @@ function EmptyState() {
 
 const styles = StyleSheet.create({
   content: {
-    padding: 16,
+    paddingHorizontal: 16,
+    paddingTop: 8,
     paddingBottom: 48,
-    gap: 8,
   },
   addButton: {
     width: 32,
@@ -215,72 +385,98 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     lineHeight: 24,
   },
-  hero: {
-    borderRadius: 20,
-    padding: 20,
-    gap: 4,
-  },
-  heroLabel: {
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  heroValue: {
-    fontSize: 36,
-    fontWeight: '700',
-    fontVariant: ['tabular-nums'],
-  },
-  heroRow: {
-    flexDirection: 'row',
-    gap: 16,
-    marginTop: 12,
-  },
-  heroStatLabel: {
-    fontSize: 13,
-  },
-  heroStatValue: {
-    fontSize: 17,
-    fontWeight: '700',
-    marginTop: 2,
-    fontVariant: ['tabular-nums'],
-  },
-  heroStatSub: {
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  updated: {
-    fontSize: 12,
-    marginTop: 14,
-  },
   banner: {
     borderRadius: 12,
     padding: 12,
+    marginBottom: 8,
   },
   bannerText: {
     fontSize: 14,
     fontWeight: '500',
   },
-  listCard: {
-    padding: 0,
-    overflow: 'hidden',
+  chartWrap: {
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  hint: {
+    fontSize: 13,
+    marginTop: 2,
+  },
+  centerTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  centerValue: {
+    fontSize: 26,
+    fontWeight: '800',
+    marginVertical: 2,
+    fontVariant: ['tabular-nums'],
+  },
+  centerSub: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  stats: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 20,
+    marginBottom: 8,
+  },
+  stat: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  statDivider: {
+    width: StyleSheet.hairlineWidth,
+    alignSelf: 'stretch',
+  },
+  statLabel: {
+    fontSize: 13,
+  },
+  statValue: {
+    fontSize: 17,
+    fontWeight: '700',
+    marginTop: 2,
+    fontVariant: ['tabular-nums'],
+  },
+  statSub: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  listHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 20,
+    marginBottom: 4,
+  },
+  listTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+  },
+  link: {
+    fontSize: 15,
+    fontWeight: '600',
   },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
     paddingVertical: 12,
+    paddingHorizontal: 4,
     gap: 12,
+    borderRadius: 8,
   },
-  badge: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
+  separator: {
+    position: 'absolute',
+    left: 28,
+    right: 0,
+    bottom: 0,
+    height: StyleSheet.hairlineWidth,
   },
-  badgeText: {
-    color: '#FFFFFF',
-    fontWeight: '700',
-    fontSize: 14,
+  dot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
   },
   rowMain: {
     flex: 1,
@@ -294,27 +490,30 @@ const styles = StyleSheet.create({
     fontSize: 13,
     marginTop: 2,
   },
+  rowPct: {
+    fontSize: 14,
+    fontVariant: ['tabular-nums'],
+  },
   rowRight: {
     alignItems: 'flex-end',
+    minWidth: 92,
   },
   rowValue: {
     fontSize: 16,
     fontWeight: '600',
     fontVariant: ['tabular-nums'],
   },
-  rowPnl: {
+  rowChange: {
     fontSize: 13,
     fontWeight: '600',
     marginTop: 2,
     fontVariant: ['tabular-nums'],
   },
-  muted: {
-    fontSize: 14,
-  },
-  disclaimer: {
+  footer: {
     fontSize: 12,
     textAlign: 'center',
-    marginTop: 16,
+    marginTop: 24,
+    lineHeight: 18,
   },
   empty: {
     alignItems: 'center',

@@ -12,17 +12,21 @@ export default function RootLayout() {
   const base = dark ? DarkTheme : DefaultTheme;
   const theme = {
     ...base,
-    colors: { ...base.colors, background: c.background, card: c.card, text: c.text, primary: c.tint, border: c.border },
+    colors: {
+      ...base.colors,
+      background: c.background,
+      card: c.background,
+      text: c.text,
+      primary: c.tint,
+      border: c.border,
+    },
   };
 
   return (
     <PortfolioProvider>
       <ThemeProvider value={theme}>
-        <Stack screenOptions={{ headerBackTitle: 'Geri' }}>
-          <Stack.Screen
-            name="index"
-            options={{ title: 'Portföyüm', headerLargeTitle: true, headerShadowVisible: false }}
-          />
+        <Stack screenOptions={{ headerBackTitle: 'Geri', headerShadowVisible: false }}>
+          <Stack.Screen name="index" options={{ title: 'Portföyüm', headerLargeTitle: true }} />
           <Stack.Screen name="add" options={{ title: 'İşlem Ekle', presentation: 'modal' }} />
           <Stack.Screen name="asset/[key]" options={{ title: '' }} />
         </Stack>

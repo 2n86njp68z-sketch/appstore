@@ -1,9 +1,6 @@
 import type { ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 
-import { kindInfo } from '@/lib/assets';
-import { formatPct } from '@/lib/format';
-import type { AllocationSlice } from '@/lib/types';
 import { useColors } from '@/constants/theme';
 
 export function Card({ children, style }: { children: ReactNode; style?: StyleProp<ViewStyle> }) {
@@ -104,29 +101,6 @@ export function StatRow({ label, value, valueColor }: { label: string; value: st
   );
 }
 
-export function AllocationBar({ slices }: { slices: AllocationSlice[] }) {
-  const c = useColors();
-  if (slices.length === 0) return null;
-  return (
-    <View style={{ gap: 12 }}>
-      <View style={[styles.bar, { backgroundColor: c.chip }]}>
-        {slices.map((s) => (
-          <View key={s.kind} style={{ flex: Math.max(s.pct, 0.5), backgroundColor: kindInfo(s.kind).color }} />
-        ))}
-      </View>
-      <View style={styles.legend}>
-        {slices.map((s) => (
-          <View key={s.kind} style={styles.legendItem}>
-            <View style={[styles.dot, { backgroundColor: kindInfo(s.kind).color }]} />
-            <Text style={[styles.legendText, { color: c.text }]}>{kindInfo(s.kind).shortLabel}</Text>
-            <Text style={[styles.legendText, { color: c.textSecondary }]}>{formatPct(s.pct, { signed: false })}</Text>
-          </View>
-        ))}
-      </View>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   card: {
     borderRadius: 16,
@@ -193,32 +167,5 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
     fontVariant: ['tabular-nums'],
-  },
-  bar: {
-    height: 12,
-    borderRadius: 6,
-    overflow: 'hidden',
-    flexDirection: 'row',
-    gap: 2,
-  },
-  legend: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    columnGap: 16,
-    rowGap: 8,
-  },
-  legendItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  dot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-  },
-  legendText: {
-    fontSize: 13,
-    fontWeight: '500',
   },
 });

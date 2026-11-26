@@ -154,7 +154,7 @@ export function computeSummary(holdings: Holding[]): PortfolioSummary {
   let costTry = 0;
   let dayChangeTry = 0;
   let incomplete = false;
-  const byKind = new Map<AssetKind, number>();
+  const byKind = new Map<AssetKind, { value: number; cost: number }>();
 
   for (const h of holdings) {
     if (h.quantity <= 0) continue;
@@ -165,11 +165,18 @@ export function computeSummary(holdings: Holding[]): PortfolioSummary {
     valueTry += h.valueTry;
     costTry += h.costTry;
     dayChangeTry += h.dayChangeTry ?? 0;
-    byKind.set(h.kind, (byKind.get(h.kind) ?? 0) + h.valueTry);
+    const k = byKind.get(h.kind) ?? { value: 0, cost: 0 };
+    byKind.set(h.kind, { value: k.value + h.valueTry, cost: k.cost + h.costTry });
   }
 
   const allocation: AllocationSlice[] = [...byKind.entries()]
-    .map(([kind, v]) => ({ kind, valueTry: v, pct: valueTry > 0 ? (v / valueTry) * 100 : 0 }))
+    .map(([kind, { value, cost }]) => ({
+      kind,
+      valueTry: value,
+      pct: valueTry > 0 ? (value / valueTry) * 100 : 0,
+      pnlTry: value - cost,
+      pnlPct: cost > 0 ? ((value - cost) / cost) * 100 : 0,
+    }))
     .sort((a, b) => b.valueTry - a.valueTry);
 
   const pnlTry = valueTry - costTry;

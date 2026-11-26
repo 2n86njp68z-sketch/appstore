@@ -75,7 +75,10 @@ export interface Holding {
 export interface AllocationSlice {
   kind: AssetKind;
   valueTry: number;
+  /** Portföy içindeki pay (%). */
   pct: number;
+  pnlTry: number;
+  pnlPct: number;
 }
 
 export interface PortfolioSummary {
