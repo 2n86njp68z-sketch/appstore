@@ -20,21 +20,21 @@ export interface AssetKindInfo {
 export const ASSET_KINDS: AssetKindInfo[] = [
   {
     kind: 'bist',
-    label: 'BIST Hisse',
-    shortLabel: 'BIST',
+    label: 'Türk Market',
+    shortLabel: 'Türk Market',
     currency: 'TRY',
     quantityLabel: 'Adet',
     placeholder: 'THYAO',
-    color: '#3B82F6',
+    color: '#2F6BFF',
   },
   {
     kind: 'us',
-    label: 'ABD Hisse',
-    shortLabel: 'ABD',
+    label: 'ABD Market',
+    shortLabel: 'ABD Market',
     currency: 'USD',
     quantityLabel: 'Adet',
     placeholder: 'AAPL',
-    color: '#8B5CF6',
+    color: '#7C5CFF',
   },
   {
     kind: 'crypto',
@@ -43,7 +43,7 @@ export const ASSET_KINDS: AssetKindInfo[] = [
     currency: 'USD',
     quantityLabel: 'Miktar',
     placeholder: 'BTC',
-    color: '#F97316',
+    color: '#FF8A3D',
   },
   { kind: 'fx', label: 'Döviz', shortLabel: 'Döviz', currency: 'TRY', quantityLabel: 'Miktar', color: '#14B8A6' },
   {
@@ -52,7 +52,7 @@ export const ASSET_KINDS: AssetKindInfo[] = [
     shortLabel: 'Emtia',
     currency: 'TRY',
     quantityLabel: 'Gram',
-    color: '#EAB308',
+    color: '#F2B705',
   },
   {
     kind: 'other',
@@ -61,34 +61,34 @@ export const ASSET_KINDS: AssetKindInfo[] = [
     currency: 'TRY',
     quantityLabel: 'Adet',
     placeholder: 'Fon kodu, örn. AFT',
-    color: '#64748B',
+    color: '#94A3B8',
   },
 ];
 
 /** Bir dilim açıldığında içindeki varlıklara verilen renkler (sırayla). */
 export const SLICE_PALETTE = [
-  '#3B82F6',
-  '#06B6D4',
-  '#10B981',
-  '#F43F5E',
-  '#F59E0B',
-  '#8B5CF6',
-  '#EC4899',
-  '#84CC16',
-  '#6366F1',
-  '#EF4444',
+  '#2F6BFF',
+  '#22B8CF',
+  '#20C997',
+  '#FF6B8B',
+  '#FFB547',
+  '#7C5CFF',
+  '#F06595',
+  '#94D82D',
+  '#5C7CFA',
+  '#FF8A3D',
   '#14B8A6',
-  '#F97316',
-  '#0EA5E9',
-  '#A855F7',
-  '#22C55E',
-  '#EAB308',
+  '#CC5DE8',
+  '#74C0FC',
+  '#FFD43B',
+  '#FA5252',
+  '#63E6BE',
 ];
 
 /** Simgesiyle uyumlu olsun diye sabit renk verilen varlıklar. */
 export const FIXED_ASSET_COLORS: Record<string, string> = {
-  'metal:GRAM_ALTIN': '#EAB308',
-  'metal:GRAM_GUMUS': '#94A3B8',
+  'metal:GRAM_ALTIN': '#F2B705',
+  'metal:GRAM_GUMUS': '#A7B1C2',
 };
 
 const KIND_MAP = Object.fromEntries(ASSET_KINDS.map((k) => [k.kind, k])) as Record<AssetKind, AssetKindInfo>;

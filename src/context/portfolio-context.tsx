@@ -88,14 +88,20 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState<string>();
   const [fxHistory, setFxHistory] = useState<FxHistory>({});
   const [displayCurrency, setDisplayCurrency] = useState<DisplayCurrency>('TRY');
+  // Geri çağırmaların her zaman son değeri görmesi için; değişiklik yapan işleyiciler de bunları hemen günceller.
   const fxHistoryRef = useRef(fxHistory);
-  fxHistoryRef.current = fxHistory;
-
   const transactionsRef = useRef(transactions);
-  transactionsRef.current = transactions;
   const lastUpdatedRef = useRef(lastUpdated);
-  lastUpdatedRef.current = lastUpdated;
   const inFlight = useRef<Promise<void> | null>(null);
+  useEffect(() => {
+    fxHistoryRef.current = fxHistory;
+  }, [fxHistory]);
+  useEffect(() => {
+    transactionsRef.current = transactions;
+  }, [transactions]);
+  useEffect(() => {
+    lastUpdatedRef.current = lastUpdated;
+  }, [lastUpdated]);
 
   const refresh = useCallback(() => {
     if (inFlight.current) return inFlight.current;

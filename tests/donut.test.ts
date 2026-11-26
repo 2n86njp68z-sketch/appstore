@@ -1,7 +1,16 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { arcPath, buildChartData, hitTest, layoutSlices, paletteFor } from '../src/lib/donut';
+import {
+  arcPath,
+  buildChartData,
+  hitTest,
+  labelCenter,
+  layoutLabels,
+  layoutSlices,
+  paletteFor,
+  roundedArcPath,
+} from '../src/lib/donut';
 import { computeHoldings, computeSummary } from '../src/lib/portfolio';
 import type { RawQuote, Transaction } from '../src/lib/types';
 
@@ -163,6 +172,79 @@ test('altın ve gümüş sabit renk alır, diğer renklerle çakışmaz', () => 
   );
   const c = buildChartData(metals, computeSummary(metals));
   const byLabel = Object.fromEntries(c[0].assets.map((a) => [a.label, a.color]));
-  assert.equal(byLabel['Gram Altın'], '#EAB308');
-  assert.equal(byLabel['Gram Gümüş'], '#94A3B8');
+  assert.equal(byLabel['Gram Altın'], '#F2B705');
+  assert.equal(byLabel['Gram Gümüş'], '#A7B1C2');
+});
+
+const fmt = (p: number) => `%${Math.round(p)}`;
+const labelOpts = { cx: 150, cy: 150, radius: 100, gap: 6, height: 16, charWidth: 7, minPct: 2 };
+const pctById = (c: typeof cats) => {
+  const m: Record<string, number> = {};
+  for (const cat of c) {
+    m[cat.kind] = cat.pct;
+    for (const a of cat.assets) m[a.key] = a.pct;
+  }
+  return m;
+};
+
+test('kapalıyken her türün kenarında yüzdesi yazar', () => {
+  const labels = layoutLabels(layoutSlices(cats), pctById(cats), fmt, labelOpts);
+  assert.deepEqual(labels.map((l) => [l.id, l.text]).sort(), [
+    ['bist', '%50'],
+    ['metal', '%20'],
+    ['us', '%30'],
+  ]);
+  // BIST 0-180°: ortası saat 3 yönü → etiket halkanın sağında, dışında
+  const bist = labels.find((l) => l.id === 'bist')!;
+  assert.ok(bist.x - bist.width / 2 >= 150 + 100 + 6 - 0.01, 'halkaya değmez');
+  close(bist.y, 150, 0.5);
+});
+
+test('açıkken yalnız o türün varlıkları etiketlenir (portföydeki payları)', () => {
+  const labels = layoutLabels(layoutSlices(cats, 'bist'), pctById(cats), fmt, labelOpts);
+  // THYAO %30, ASELS %15, SISE %5
+  assert.deepEqual(labels.map((l) => l.text).sort(), ['%15', '%30', '%5']);
+});
+
+test('çakışan ve çok küçük dilimlerin etiketi atlanır', () => {
+  const many = computeHoldings(
+    [
+      buy('bist', 'THYAO', 1000, 1),
+      buy('bist', 'ASELS', 3, 1), // %0,3 → minPct altında
+      buy('bist', 'SISE', 30, 1),
+      buy('bist', 'KCHOL', 30, 1),
+      buy('bist', 'AKBNK', 30, 1),
+    ],
+    { ...raw, 'AKBNK.IS': { price: 10, fetchedAt: 1 }, 'KCHOL.IS': { price: 10, fetchedAt: 1 } },
+    {},
+  );
+  const c = buildChartData(many, computeSummary(many));
+  const labels = layoutLabels(layoutSlices(c, 'bist'), pctById(c), fmt, labelOpts);
+  assert.ok(!labels.some((l) => l.id === 'bist:ASELS'));
+  for (let i = 0; i < labels.length; i++) {
+    for (let j = i + 1; j < labels.length; j++) {
+      const a = labels[i];
+      const b = labels[j];
+      const overlap = Math.abs(a.x - b.x) < (a.width + b.width) / 2 && Math.abs(a.y - b.y) < (a.height + b.height) / 2;
+      assert.ok(!overlap, `${a.id} ile ${b.id} üst üste`);
+    }
+  }
+});
+
+test('açılan dilimin etiketi kayma kadar dışarı çıkar', () => {
+  const s = layoutSlices(cats, 'bist')[0];
+  const base = labelCenter(s, 30, labelOpts);
+  const pushed = labelCenter(s, 30, { ...labelOpts, push: () => 16 });
+  close(Math.hypot(pushed.x - 150, pushed.y - 150) - Math.hypot(base.x - 150, base.y - 150), 16);
+});
+
+test('yuvarlak köşeli dilim yolu', () => {
+  const d = roundedArcPath(100, 100, 60, 90, 0, Math.PI / 2, 5);
+  assert.equal((d.match(/Q/g) ?? []).length, 4);
+  assert.match(d, /^M.* Z$/);
+  // Çok dar dilimde köşe küçülür, yol yine geçerli kalır.
+  const thin = roundedArcPath(100, 100, 60, 90, 0, 0.05, 5);
+  assert.ok(thin.length > 0 && !thin.includes('NaN'));
+  // Tam tur: köşesiz halka
+  assert.equal(roundedArcPath(100, 100, 60, 90, 0, Math.PI * 2, 5), arcPath(100, 100, 60, 90, 0, Math.PI * 2));
 });

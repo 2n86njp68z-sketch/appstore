@@ -16,11 +16,11 @@ import {
 import { AssetIcon, CategoryIcon } from '@/components/asset-icon';
 import { DonutChart } from '@/components/donut-chart';
 import { PrimaryButton } from '@/components/ui';
-import { pnlColor, useColors } from '@/constants/theme';
+import { pnlColor, pnlSoft, Radius, Type, useColors } from '@/constants/theme';
 import { usePortfolio } from '@/context/portfolio-context';
 import { displaySymbol, kindInfo, quantityUnit } from '@/lib/assets';
 import { buildChartData, type ChartAsset, type ChartCategory, type DonutHit } from '@/lib/donut';
-import { currencySymbol, formatMoney, formatPct, formatPrice, formatQuantity, formatTime } from '@/lib/format';
+import { currencySymbol, formatMoney, formatPct, formatPrice, formatQuantity, formatTime, trUpper } from '@/lib/format';
 import { DISPLAY_CURRENCIES } from '@/lib/portfolio';
 import type { AssetKind, DisplayCurrency, Holding } from '@/lib/types';
 
@@ -44,7 +44,7 @@ export default function PortfolioScreen() {
   const activeKind = openCat?.kind;
   const selected = openCat?.assets.find((a) => a.key === selectedAsset);
   const closed = holdings.filter((h) => h.quantity <= 0);
-  const chartSize = Math.min(width - 32, 340);
+  const chartSize = Math.min(width - 16, 420);
 
   function openCategory(kind: AssetKind) {
     tick();
@@ -78,8 +78,10 @@ export default function PortfolioScreen() {
     closeAll();
   }
 
-  let center: { icon?: ReactNode; title: string; value?: number; sub: string; subColor: string };
+  // Halkanın ortası: başlık, değer ve kâr/zarar rozeti (pay yüzdeleri halkanın kenarında).
+  let center: { icon?: ReactNode; title: string; value?: number; pnl?: number; pnlPct?: number };
   if (selected) {
+    const v = selected.holding.views[cur];
     center = {
       icon: (
         <AssetIcon
@@ -87,29 +89,25 @@ export default function PortfolioScreen() {
           symbol={selected.holding.symbol}
           label={selected.label}
           color={selected.color}
-          size={20}
+          size={16}
         />
       ),
       title: selected.label,
-      value: selected.holding.views[cur]?.value,
-      sub: `Portföyün ${formatPct(selected.pct, { signed: false })}'i`,
-      subColor: c.textSecondary,
+      value: v?.value,
+      pnl: v?.pnl,
+      pnlPct: v?.pnlPct,
     };
   } else if (openCat) {
+    const t = openCat.totals[cur];
     center = {
-      icon: <CategoryIcon kind={openCat.kind} size={20} />,
+      icon: <CategoryIcon kind={openCat.kind} size={16} />,
       title: openCat.label,
-      value: openCat.totals[cur]?.value,
-      sub: `Portföyün ${formatPct(openCat.pct, { signed: false })}'i`,
-      subColor: c.textSecondary,
+      value: t?.value,
+      pnl: t?.pnl,
+      pnlPct: t?.pnlPct,
     };
   } else {
-    center = {
-      title: 'Toplam Değer',
-      value: totals.value,
-      sub: formatPct(totals.pnlPct),
-      subColor: pnlColor(c, totals.pnl),
-    };
+    center = { title: 'Toplam Değer', value: totals.value, pnl: totals.pnl, pnlPct: totals.pnlPct };
   }
 
   return (
@@ -123,7 +121,8 @@ export default function PortfolioScreen() {
               accessibilityRole="button"
               accessibilityLabel="İşlem ekle"
               style={({ pressed }) => [styles.addButton, { backgroundColor: c.tint, opacity: pressed ? 0.7 : 1 }]}>
-              <Text style={styles.addButtonText}>+</Text>
+              <View style={[styles.plusH, { backgroundColor: c.tintText }]} />
+              <View style={[styles.plusV, { backgroundColor: c.tintText }]} />
             </Pressable>
           ),
         }}
@@ -141,7 +140,7 @@ export default function PortfolioScreen() {
           <>
             {(error || totals.incomplete) && (
               <View style={[styles.banner, { backgroundColor: c.warningBg }]}>
-                <Text style={[styles.bannerText, { color: c.warning }]}>
+                <Text style={[Type.subhead, { color: c.warning }]}>
                   {error ?? 'Kur alınamadığı için bazı varlıklar toplama dahil edilmedi.'}
                 </Text>
               </View>
@@ -153,20 +152,27 @@ export default function PortfolioScreen() {
                   categories={categories}
                   openKind={activeKind}
                   selectedAsset={selected?.key}
-                  size={chartSize}
+                  width={chartSize}
                   onTap={onChartTap}>
                   <View style={styles.centerTitleRow}>
                     {center.icon}
-                    <Text style={[styles.centerTitle, { color: c.textSecondary }]} numberOfLines={1}>
-                      {center.title}
+                    <Text style={[Type.overline, styles.centerTitle, { color: c.textSecondary }]} numberOfLines={1}>
+                      {trUpper(center.title)}
                     </Text>
                   </View>
-                  <Text style={[styles.centerValue, { color: c.text }]} numberOfLines={1} adjustsFontSizeToFit>
+                  <Text
+                    style={[Type.display, styles.centerValue, { color: c.text }]}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit>
                     {center.value != null ? formatMoney(center.value, cur, { decimals: 0 }) : '—'}
                   </Text>
-                  <Text style={[styles.centerSub, { color: center.subColor }]} numberOfLines={1}>
-                    {center.sub}
-                  </Text>
+                  {center.pnlPct != null && (
+                    <View style={[styles.pnlPill, { backgroundColor: pnlSoft(c, center.pnl) }]}>
+                      <Text style={[Type.caption, styles.tabular, { color: pnlColor(c, center.pnl) }]}>
+                        {formatPct(center.pnlPct)}
+                      </Text>
+                    </View>
+                  )}
                   <CurrencySwitch active={cur} />
                 </DonutChart>
                 {activeKind ? (
@@ -175,10 +181,10 @@ export default function PortfolioScreen() {
                     hitSlop={8}
                     accessibilityRole="button"
                     style={({ pressed }) => [styles.backPill, { backgroundColor: c.chip, opacity: pressed ? 0.7 : 1 }]}>
-                    <Text style={[styles.backPillText, { color: c.tint }]}>‹ Tüm portföy</Text>
+                    <Text style={[Type.caption, { color: c.link, fontSize: 13 }]}>‹ Tüm portföy</Text>
                   </Pressable>
                 ) : (
-                  <Text style={[styles.hint, { color: c.textSecondary }]}>
+                  <Text style={[Type.subhead, styles.hint, { color: c.textTertiary }]}>
                     Ayrıntı için dilime, döviz için ortaya dokun
                   </Text>
                 )}
@@ -186,29 +192,28 @@ export default function PortfolioScreen() {
             )}
 
             <View style={styles.stats}>
-              <Stat
+              <StatCard
                 label="Toplam K/Z"
                 value={formatMoney(totals.pnl, cur, { signed: true })}
-                sub={formatPct(totals.pnlPct)}
-                color={pnlColor(c, totals.pnl)}
+                pct={formatPct(totals.pnlPct)}
+                tone={totals.pnl}
               />
-              <View style={[styles.statDivider, { backgroundColor: c.border }]} />
-              <Stat
+              <StatCard
                 label="Bugün"
                 value={formatMoney(totals.dayChange, cur, { signed: true })}
-                sub={formatPct(totals.dayChangePct)}
-                color={pnlColor(c, totals.dayChange)}
+                pct={formatPct(totals.dayChangePct)}
+                tone={totals.dayChange}
               />
             </View>
 
             <View style={styles.listHeader}>
-              <Text style={[styles.listTitle, { color: c.text }]}>
-                {openCat ? kindInfo(openCat.kind).label : 'Dağılım'}
-              </Text>
-              {openCat && (
+              <Text style={[Type.title, { color: c.text }]}>{openCat ? kindInfo(openCat.kind).label : 'Dağılım'}</Text>
+              {openCat ? (
                 <Pressable onPress={closeAll} hitSlop={10} accessibilityRole="button">
-                  <Text style={[styles.link, { color: c.tint }]}>‹ Tüm portföy</Text>
+                  <Text style={[Type.bodyStrong, { color: c.link }]}>‹ Tüm portföy</Text>
                 </Pressable>
+              ) : (
+                <Text style={[Type.subhead, { color: c.textTertiary }]}>{categories.length} kategori</Text>
               )}
             </View>
 
@@ -237,7 +242,7 @@ export default function PortfolioScreen() {
             {closed.length > 0 && !openCat && (
               <>
                 <View style={styles.listHeader}>
-                  <Text style={[styles.listTitle, { color: c.text }]}>Satılanlar</Text>
+                  <Text style={[Type.title, { color: c.text }]}>Satılanlar</Text>
                 </View>
                 {closed.map((h, i) => (
                   <ClosedRow key={h.key} holding={h} currency={cur} last={i === closed.length - 1} />
@@ -245,7 +250,7 @@ export default function PortfolioScreen() {
               </>
             )}
 
-            <Text style={[styles.footer, { color: c.textSecondary }]}>
+            <Text style={[Type.subhead, styles.footer, { color: c.textTertiary }]}>
               {refreshing
                 ? 'Fiyatlar güncelleniyor…'
                 : lastUpdated
@@ -265,10 +270,10 @@ export default function PortfolioScreen() {
 function CurrencySwitch({ active }: { active: DisplayCurrency }) {
   const c = useColors();
   return (
-    <View style={styles.switchRow}>
+    <View style={[styles.switchRow, { backgroundColor: c.chip }]}>
       {DISPLAY_CURRENCIES.map((k) => (
         <View key={k} style={[styles.switchItem, k === active && { backgroundColor: c.tint }]}>
-          <Text style={[styles.switchText, { color: k === active ? c.tintText : c.textSecondary }]}>
+          <Text style={[Type.caption, { color: k === active ? c.tintText : c.textSecondary }]}>
             {currencySymbol(k)}
           </Text>
         </View>
@@ -277,15 +282,18 @@ function CurrencySwitch({ active }: { active: DisplayCurrency }) {
   );
 }
 
-function Stat({ label, value, sub, color }: { label: string; value: string; sub: string; color: string }) {
+function StatCard({ label, value, pct, tone }: { label: string; value: string; pct: string; tone: number }) {
   const c = useColors();
+  const color = pnlColor(c, tone);
   return (
-    <View style={styles.stat}>
-      <Text style={[styles.statLabel, { color: c.textSecondary }]}>{label}</Text>
-      <Text style={[styles.statValue, { color }]} numberOfLines={1} adjustsFontSizeToFit>
+    <View style={[styles.statCard, { backgroundColor: c.card }]}>
+      <Text style={[Type.subhead, { color: c.textSecondary }]}>{label}</Text>
+      <Text style={[Type.headline, styles.tabular, styles.statValue, { color }]} numberOfLines={1} adjustsFontSizeToFit>
         {value}
       </Text>
-      <Text style={[styles.statSub, { color }]}>{sub}</Text>
+      <View style={[styles.pnlPill, styles.statPill, { backgroundColor: pnlSoft(c, tone) }]}>
+        <Text style={[Type.caption, styles.tabular, { color }]}>{pct}</Text>
+      </View>
     </View>
   );
 }
@@ -318,29 +326,35 @@ function Row({
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
-      style={({ pressed }) => [styles.row, (pressed || highlighted) && { backgroundColor: c.chip }]}>
+      style={({ pressed }) => [styles.row, (pressed || highlighted) && { backgroundColor: c.card }]}>
       {!last && <View style={[styles.separator, { backgroundColor: c.border }]} />}
       {icon}
       <View style={styles.rowMain}>
-        <Text style={[styles.rowTitle, { color: c.text }]} numberOfLines={1}>
+        <Text style={[Type.headline, { color: c.text }]} numberOfLines={1}>
           {title}
         </Text>
         {subtitle ? (
-          <Text style={[styles.rowSub, { color: c.textSecondary }]} numberOfLines={1}>
+          <Text style={[Type.subhead, styles.rowSub, { color: c.textSecondary }]} numberOfLines={1}>
             {subtitle}
           </Text>
         ) : null}
       </View>
-      {pct ? <Text style={[styles.rowPct, { color: c.textSecondary }]}>{pct}</Text> : null}
+      {pct ? (
+        <View style={[styles.weight, { backgroundColor: c.chip }]}>
+          <Text style={[Type.caption, styles.tabular, { color: c.textSecondary }]}>{pct}</Text>
+        </View>
+      ) : null}
       <View style={styles.rowRight}>
-        <Text style={[styles.rowValue, { color: c.text }]}>{value}</Text>
-        {change ? <Text style={[styles.rowChange, { color: changeColor }]}>{change}</Text> : null}
+        <Text style={[Type.number, styles.rowValue, { color: c.text }]}>{value}</Text>
+        {change ? (
+          <Text style={[Type.caption, styles.tabular, styles.rowChange, { color: changeColor }]}>{change}</Text>
+        ) : null}
       </View>
     </Pressable>
   );
 }
 
-const ICON_SIZE = 38;
+const ICON_SIZE = 40;
 
 function CategoryRow({
   category: cat,
@@ -360,7 +374,7 @@ function CategoryRow({
       icon={<CategoryIcon kind={cat.kind} size={ICON_SIZE} />}
       title={kindInfo(cat.kind).label}
       subtitle={`${cat.assets.length} varlık`}
-      pct={formatPct(cat.pct, { signed: false })}
+      pct={formatPct(cat.pct, { signed: false, decimals: 1 })}
       value={t ? formatMoney(t.value, currency, { decimals: 0 }) : '—'}
       change={t ? formatPct(t.pnlPct) : ''}
       changeColor={pnlColor(c, t?.pnl)}
@@ -391,7 +405,7 @@ function AssetRow({
       subtitle={`${formatQuantity(h.quantity)} ${quantityUnit(h.kind, h.symbol)} · ${
         h.priceMissing ? 'fiyat yok' : formatPrice(h.price, h.currency)
       }`}
-      pct={formatPct(a.pct, { signed: false })}
+      pct={formatPct(a.pct, { signed: false, decimals: 1 })}
       value={v ? formatMoney(v.value, currency, { decimals: 0 }) : '—'}
       change={v ? formatPct(v.pnlPct) : ''}
       changeColor={pnlColor(c, v?.pnl)}
@@ -408,7 +422,7 @@ function ClosedRow({ holding: h, currency, last }: { holding: Holding; currency:
   const label = displaySymbol(h.kind, h.symbol);
   return (
     <Row
-      icon={<AssetIcon kind={h.kind} symbol={h.symbol} label={label} color={c.textSecondary} size={ICON_SIZE} />}
+      icon={<AssetIcon kind={h.kind} symbol={h.symbol} label={label} color={c.textTertiary} size={ICON_SIZE} />}
       title={label}
       subtitle={`${kindInfo(h.kind).label} · gerçekleşen`}
       value={
@@ -428,12 +442,14 @@ function EmptyState() {
   const c = useColors();
   return (
     <View style={styles.empty}>
-      <Text style={styles.emptyIcon}>📈</Text>
-      <Text style={[styles.emptyTitle, { color: c.text }]}>Portföyün boş</Text>
-      <Text style={[styles.emptyText, { color: c.textSecondary }]}>
+      <View style={[styles.emptyBadge, { backgroundColor: c.tintSoft }]}>
+        <Text style={styles.emptyIcon}>📈</Text>
+      </View>
+      <Text style={[Type.title, { color: c.text, fontSize: 24 }]}>Portföyün boş</Text>
+      <Text style={[Type.body, styles.emptyText, { color: c.textSecondary }]}>
         Hisse, kripto, döviz veya emtia alımlarını ekle; güncel değerini ve kâr/zararını anlık takip et.
       </Text>
-      <View style={{ alignSelf: 'stretch', marginTop: 8 }}>
+      <View style={{ alignSelf: 'stretch', marginTop: 12 }}>
         <PrimaryButton label="İlk işlemini ekle" onPress={() => router.push('/add')} />
       </View>
     </View>
@@ -443,48 +459,47 @@ function EmptyState() {
 const styles = StyleSheet.create({
   content: {
     paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 48,
+    paddingTop: 4,
+    paddingBottom: 56,
+  },
+  tabular: {
+    fontVariant: ['tabular-nums'],
   },
   addButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  addButtonText: {
-    color: '#FFFFFF',
-    fontSize: 22,
-    fontWeight: '600',
-    lineHeight: 24,
+  plusH: {
+    position: 'absolute',
+    width: 14,
+    height: 2.5,
+    borderRadius: 2,
+  },
+  plusV: {
+    position: 'absolute',
+    width: 2.5,
+    height: 14,
+    borderRadius: 2,
   },
   banner: {
-    borderRadius: 12,
+    borderRadius: Radius.md,
     padding: 12,
     marginBottom: 8,
   },
-  bannerText: {
-    fontSize: 14,
-    fontWeight: '500',
-  },
   chartWrap: {
     alignItems: 'center',
-    marginTop: 4,
+    gap: 6,
   },
   hint: {
-    fontSize: 13,
-    marginTop: 2,
     textAlign: 'center',
   },
   backPill: {
     paddingHorizontal: 14,
     paddingVertical: 7,
-    borderRadius: 999,
-  },
-  backPillText: {
-    fontSize: 14,
-    fontWeight: '600',
+    borderRadius: Radius.pill,
   },
   centerTitleRow: {
     flexDirection: 'row',
@@ -493,90 +508,69 @@ const styles = StyleSheet.create({
     maxWidth: '100%',
   },
   centerTitle: {
-    fontSize: 14,
-    fontWeight: '600',
     flexShrink: 1,
   },
   centerValue: {
-    fontSize: 26,
-    fontWeight: '800',
-    marginVertical: 2,
-    fontVariant: ['tabular-nums'],
+    marginTop: 4,
   },
-  centerSub: {
-    fontSize: 14,
-    fontWeight: '700',
+  pnlPill: {
+    borderRadius: Radius.pill,
+    paddingHorizontal: 9,
+    paddingVertical: 3,
+    marginTop: 4,
   },
   switchRow: {
     flexDirection: 'row',
-    gap: 4,
-    marginTop: 8,
+    borderRadius: Radius.pill,
+    padding: 2,
+    marginTop: 10,
   },
   switchItem: {
-    width: 24,
+    width: 28,
     height: 20,
-    borderRadius: 6,
+    borderRadius: Radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  switchText: {
-    fontSize: 12,
-    fontWeight: '700',
-  },
   stats: {
     flexDirection: 'row',
-    alignItems: 'center',
+    gap: 12,
     marginTop: 20,
-    marginBottom: 8,
   },
-  stat: {
+  statCard: {
     flex: 1,
-    alignItems: 'center',
-  },
-  statDivider: {
-    width: StyleSheet.hairlineWidth,
-    alignSelf: 'stretch',
-  },
-  statLabel: {
-    fontSize: 13,
+    borderRadius: Radius.lg,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
   },
   statValue: {
-    fontSize: 17,
-    fontWeight: '700',
-    marginTop: 2,
-    fontVariant: ['tabular-nums'],
+    fontSize: 18,
+    marginTop: 6,
   },
-  statSub: {
-    fontSize: 13,
-    fontWeight: '600',
+  statPill: {
+    alignSelf: 'flex-start',
+    marginTop: 8,
   },
   listHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginTop: 20,
-    marginBottom: 4,
-  },
-  listTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-  },
-  link: {
-    fontSize: 15,
-    fontWeight: '600',
+    marginTop: 28,
+    marginBottom: 6,
   },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: 4,
+    paddingVertical: 12,
+    paddingHorizontal: 6,
+    marginHorizontal: -6,
     gap: 12,
-    borderRadius: 8,
+    borderRadius: Radius.md,
   },
   separator: {
     position: 'absolute',
-    left: 4 + ICON_SIZE + 12,
-    right: 0,
+    left: 6 + ICON_SIZE + 12,
+    right: 6,
     bottom: 0,
     height: StyleSheet.hairlineWidth,
   },
@@ -584,55 +578,49 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 0,
   },
-  rowTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-  },
   rowSub: {
-    fontSize: 13,
     marginTop: 2,
   },
-  rowPct: {
-    fontSize: 14,
-    fontVariant: ['tabular-nums'],
+  weight: {
+    borderRadius: Radius.pill,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
   },
   rowRight: {
     alignItems: 'flex-end',
-    minWidth: 92,
+    minWidth: 88,
   },
   rowValue: {
-    fontSize: 16,
-    fontWeight: '600',
-    fontVariant: ['tabular-nums'],
+    fontSize: 15,
   },
   rowChange: {
-    fontSize: 13,
-    fontWeight: '600',
-    marginTop: 2,
-    fontVariant: ['tabular-nums'],
+    marginTop: 3,
   },
   footer: {
     fontSize: 12,
     textAlign: 'center',
-    marginTop: 24,
+    marginTop: 28,
     lineHeight: 18,
   },
   empty: {
     alignItems: 'center',
-    paddingTop: 64,
+    paddingTop: 56,
     paddingHorizontal: 16,
-    gap: 8,
+    gap: 10,
+  },
+  emptyBadge: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 6,
   },
   emptyIcon: {
-    fontSize: 56,
-  },
-  emptyTitle: {
-    fontSize: 22,
-    fontWeight: '700',
+    fontSize: 40,
   },
   emptyText: {
-    fontSize: 15,
     textAlign: 'center',
-    lineHeight: 21,
+    lineHeight: 22,
   },
 });

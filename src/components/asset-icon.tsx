@@ -1,7 +1,7 @@
 import { useId, type ReactNode } from 'react';
 import { Platform, Text, View } from 'react-native';
 
-import { useColors } from '@/constants/theme';
+import { Font, useColors } from '@/constants/theme';
 import Svg, {
   Circle,
   ClipPath,
@@ -337,7 +337,7 @@ export function AssetIcon({
         alignItems: 'center',
         justifyContent: 'center',
       }}>
-      <Text style={{ color: '#FFFFFF', fontSize: size * 0.46, fontWeight: '700' }}>{letter}</Text>
+      <Text style={{ color: '#FFFFFF', fontSize: size * 0.44, fontFamily: Font.bold }}>{letter}</Text>
     </View>
   );
 }

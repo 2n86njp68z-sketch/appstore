@@ -4,7 +4,7 @@ import { Alert, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, Vi
 
 import { AssetIcon } from '@/components/asset-icon';
 import { Card, PrimaryButton, SectionTitle, StatRow } from '@/components/ui';
-import { pnlColor, useColors } from '@/constants/theme';
+import { Font, pnlColor, useColors } from '@/constants/theme';
 import { usePortfolio } from '@/context/portfolio-context';
 import { displaySymbol, kindInfo } from '@/lib/assets';
 import {
@@ -104,8 +104,8 @@ export default function AssetScreen() {
                   keyboardType="decimal-pad"
                   autoFocus
                   placeholder={`Güncel fiyat (${currencySymbol(h.currency)})`}
-                  placeholderTextColor={c.textSecondary}
-                  style={[styles.input, { color: c.text, backgroundColor: c.chip }]}
+                  placeholderTextColor={c.textTertiary}
+                  style={[styles.input, { color: c.text, backgroundColor: c.background }]}
                   onSubmitEditing={savePrice}
                 />
                 <Pressable onPress={savePrice} style={[styles.smallButton, { backgroundColor: c.tint }]}>
@@ -119,7 +119,7 @@ export default function AssetScreen() {
                   setEditingPrice(true);
                 }}
                 hitSlop={8}>
-                <Text style={[styles.link, { color: c.tint }]}>Fiyatı elle güncelle</Text>
+                <Text style={[styles.link, { color: c.link }]}>Fiyatı elle güncelle</Text>
               </Pressable>
             ))}
         </Card>
@@ -155,12 +155,12 @@ export default function AssetScreen() {
 
         <View style={styles.actions}>
           <View style={{ flex: 1 }}>
-            <PrimaryButton label="Alış ekle" color={c.positive} onPress={() => addMore('buy')} />
+            <PrimaryButton label="Alış ekle" color={c.buy} onPress={() => addMore('buy')} />
           </View>
           <View style={{ flex: 1 }}>
             <PrimaryButton
               label="Satış ekle"
-              color={c.negative}
+              color={c.sell}
               disabled={h.quantity <= 0}
               onPress={() => addMore('sell')}
             />
@@ -248,8 +248,8 @@ function TransactionRow({
   const buy = tx.side === 'buy';
   return (
     <View style={[styles.txRow, !last && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: c.border }]}>
-      <View style={[styles.txBadge, { backgroundColor: buy ? c.positive : c.negative }]}>
-        <Text style={styles.txBadgeText}>{buy ? 'AL' : 'SAT'}</Text>
+      <View style={[styles.txBadge, { backgroundColor: buy ? c.positiveSoft : c.negativeSoft }]}>
+        <Text style={[styles.txBadgeText, { color: buy ? c.positive : c.negative }]}>{buy ? 'AL' : 'SAT'}</Text>
       </View>
       <View style={{ flex: 1 }}>
         <Text style={[styles.txMain, { color: c.text }]}>
@@ -283,46 +283,50 @@ const styles = StyleSheet.create({
   },
   fxLabel: {
     fontSize: 15,
-    fontWeight: '600',
+    fontFamily: Font.semibold,
   },
   fxSub: {
+    fontFamily: Font.medium,
     fontSize: 13,
     marginTop: 2,
     fontVariant: ['tabular-nums'],
   },
   fxPnl: {
     fontSize: 15,
-    fontWeight: '700',
+    fontFamily: Font.bold,
     fontVariant: ['tabular-nums'],
   },
   note: {
+    fontFamily: Font.medium,
     fontSize: 12,
     marginTop: 6,
     paddingHorizontal: 4,
   },
   kind: {
-    fontSize: 13,
-    fontWeight: '700',
-    letterSpacing: 0.5,
+    fontSize: 11,
+    fontFamily: Font.bold,
+    letterSpacing: 1.1,
   },
   name: {
+    fontFamily: Font.medium,
     fontSize: 15,
     marginTop: 4,
   },
   price: {
     fontSize: 32,
-    fontWeight: '700',
-    marginTop: 8,
+    fontFamily: Font.extrabold,
+    letterSpacing: -0.8,
+    marginTop: 14,
     fontVariant: ['tabular-nums'],
   },
   change: {
     fontSize: 15,
-    fontWeight: '600',
+    fontFamily: Font.semibold,
     marginTop: 2,
   },
   link: {
     fontSize: 15,
-    fontWeight: '600',
+    fontFamily: Font.semibold,
     marginTop: 12,
   },
   priceEdit: {
@@ -332,6 +336,7 @@ const styles = StyleSheet.create({
   },
   input: {
     flex: 1,
+    fontFamily: Font.medium,
     fontSize: 17,
     paddingHorizontal: 14,
     paddingVertical: 10,
@@ -344,7 +349,7 @@ const styles = StyleSheet.create({
   },
   smallButtonText: {
     color: '#FFFFFF',
-    fontWeight: '700',
+    fontFamily: Font.bold,
     fontSize: 15,
   },
   actions: {
@@ -371,27 +376,28 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   txBadgeText: {
-    color: '#FFFFFF',
     fontSize: 11,
-    fontWeight: '800',
+    letterSpacing: 0.4,
+    fontFamily: Font.extrabold,
   },
   txMain: {
     fontSize: 15,
-    fontWeight: '500',
+    fontFamily: Font.medium,
     fontVariant: ['tabular-nums'],
   },
   txSub: {
+    fontFamily: Font.medium,
     fontSize: 13,
     marginTop: 2,
   },
   txTotal: {
     fontSize: 15,
-    fontWeight: '600',
+    fontFamily: Font.semibold,
     fontVariant: ['tabular-nums'],
   },
   delete: {
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: Font.semibold,
   },
   missing: {
     flex: 1,
@@ -400,6 +406,7 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   missingText: {
+    fontFamily: Font.medium,
     fontSize: 16,
     textAlign: 'center',
   },

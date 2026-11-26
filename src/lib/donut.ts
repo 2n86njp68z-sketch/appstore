@@ -145,6 +145,111 @@ export function arcPath(cx: number, cy: number, r0: number, r1: number, a0: numb
   );
 }
 
+/**
+ * Köşeleri yuvarlatılmış halka dilimi. Dilim dar ise köşe yarıçapı kendiliğinden küçülür.
+ * Tam turda köşe olmadığından düz halka çizilir.
+ */
+export function roundedArcPath(
+  cx: number,
+  cy: number,
+  r0: number,
+  r1: number,
+  a0: number,
+  a1: number,
+  corner: number,
+): string {
+  const span = a1 - a0;
+  if (span <= 0) return '';
+  if (span >= TAU - 1e-6) return arcPath(cx, cy, r0, r1, a0, a1);
+  // Köşe yarıçapı; dilimin iç kenar genişliğinin ve kalınlığının yarısını aşmasın.
+  const rc = Math.max(0, Math.min(corner, (r1 - r0) / 2, (span * r0) / 2 - 0.01));
+  if (rc < 0.5) return arcPath(cx, cy, r0, r1, a0, a1);
+  const dOut = rc / r1;
+  const dIn = rc / r0;
+  const p = (r: number, a: number) => point(cx, cy, r, a);
+  const outLarge = span - 2 * dOut > Math.PI ? 1 : 0;
+  const inLarge = span - 2 * dIn > Math.PI ? 1 : 0;
+  return [
+    `M${p(r1, a0 + dOut)}`,
+    `A${r1},${r1} 0 ${outLarge} 1 ${p(r1, a1 - dOut)}`,
+    `Q${p(r1, a1)} ${p(r1 - rc, a1)}`,
+    `L${p(r0 + rc, a1)}`,
+    `Q${p(r0, a1)} ${p(r0, a1 - dIn)}`,
+    `A${r0},${r0} 0 ${inLarge} 0 ${p(r0, a0 + dIn)}`,
+    `Q${p(r0, a0)} ${p(r0 + rc, a0)}`,
+    `L${p(r1 - rc, a0)}`,
+    `Q${p(r1, a0)} ${p(r1, a0 + dOut)}`,
+    'Z',
+  ].join(' ');
+}
+
+export interface SliceLabel {
+  id: string;
+  text: string;
+  /** Etiket kutusunun merkezi. */
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export interface LabelOptions {
+  cx: number;
+  cy: number;
+  /** Halkanın dış yarıçapı. */
+  radius: number;
+  /** Halka ile etiket arasındaki boşluk. */
+  gap: number;
+  height: number;
+  /** Bir karakterin yaklaşık genişliği (px). */
+  charWidth: number;
+  /** Bu yüzdenin altındaki dilimlere etiket konmaz. */
+  minPct: number;
+  /** Dilimin ayrıca dışarı kaydığı miktar (açılan dilimler için). */
+  push?: (slice: DonutSlice) => number;
+}
+
+/** Dilimin ortasının dışına, kutunun halkaya değmeyeceği uzaklıkta etiket konumu. */
+export function labelCenter(slice: DonutSlice, width: number, o: LabelOptions): { x: number; y: number } {
+  const mid = (slice.start + slice.end) / 2;
+  const sin = Math.sin(mid);
+  const cos = Math.cos(mid);
+  // Kutunun bu yöndeki yarı genişliği (dikdörtgenin destek fonksiyonu).
+  const half = (Math.abs(sin) * width) / 2 + (Math.abs(cos) * o.height) / 2;
+  const r = o.radius + o.gap + half + (o.push?.(slice) ?? 0);
+  return { x: o.cx + r * sin, y: o.cy - r * cos };
+}
+
+/**
+ * Halkanın kenarına yüzde etiketlerini yerleştirir. Bir tür açıksa yalnız onun varlıkları etiketlenir.
+ * Büyük dilimler önceliklidir; üst üste binecek etiketler atlanır.
+ */
+export function layoutLabels(
+  slices: DonutSlice[],
+  pctById: Record<string, number>,
+  format: (pct: number) => string,
+  o: LabelOptions,
+): SliceLabel[] {
+  const anyExpanded = slices.some((s) => s.expanded);
+  const candidates = slices
+    .filter((s) => (anyExpanded ? s.expanded : true) && (pctById[s.id] ?? 0) >= o.minPct)
+    .sort((a, b) => (pctById[b.id] ?? 0) - (pctById[a.id] ?? 0));
+  const placed: SliceLabel[] = [];
+  for (const s of candidates) {
+    const text = format(pctById[s.id]);
+    const width = Math.ceil(text.length * o.charWidth + 8);
+    const { x, y } = labelCenter(s, width, o);
+    const box = { id: s.id, text, x, y, width, height: o.height };
+    const overlaps = placed.some(
+      (b) =>
+        Math.abs(b.x - box.x) < (b.width + box.width) / 2 + 2 &&
+        Math.abs(b.y - box.y) < (b.height + box.height) / 2 + 1,
+    );
+    if (!overlaps) placed.push(box);
+  }
+  return placed;
+}
+
 export type DonutHit = { type: 'slice'; slice: DonutSlice } | { type: 'center' } | { type: 'outside' };
 
 /** Dokunulan noktanın hangi dilime denk geldiğini bulur. */

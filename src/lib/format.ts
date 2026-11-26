@@ -45,10 +45,11 @@ export function formatPrice(value: number, currency: DisplayCurrency): string {
 }
 
 /** Yüzde: "+%12,34" */
-export function formatPct(value: number, opts: { signed?: boolean } = { signed: true }): string {
+export function formatPct(value: number, opts: { signed?: boolean; decimals?: number } = { signed: true }): string {
   if (!Number.isFinite(value)) return '—';
-  const body = formatNumber(Math.abs(value), 2, 2);
-  const isZero = body === '0,00' || body === '0';
+  const d = opts.decimals ?? 2;
+  const body = formatNumber(Math.abs(value), d, d);
+  const isZero = !/[1-9]/.test(body);
   const sign = value < 0 && !isZero ? '-' : opts.signed && !isZero ? '+' : '';
   return `${sign}%${body}`;
 }

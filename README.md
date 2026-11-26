@@ -5,7 +5,8 @@ Expo (React Native) ile yazıldı. Geliştirmek ve App Store'a göndermek için 
 
 ## Özellikler
 
-- **Halka grafik:** Ana sayfanın ortasında portföy türlere göre (BIST, ABD, Emtia…) dilim dilim görünür.
+- **Halka grafik:** Ana sayfanın ortasında portföy türlere göre (Türk Market, ABD Market, Emtia…) dilim dilim görünür.
+  - Her dilimin portföydeki payı halkanın kenarında yazar.
   - Bir dilime dokununca o dilim yerinde içindeki varlıklara ayrılır, her biri farklı renkte. Diğer dilimler soluklaşır.
   - Ayrılan bir varlığa dokununca ortada onun değeri yazar.
   - "‹ Tüm portföy" düğmesiyle ya da halkanın dışına dokunarak geri dönülür.
@@ -13,13 +14,13 @@ Expo (React Native) ile yazıldı. Geliştirmek ve App Store'a göndermek için 
   - Ana sayfadaki tüm tutarlar ve kâr/zarar seçilen para biriminde görünür. Seçim hatırlanır.
   - Dolar ve euro bazında kâr/zarar, her alışın kendi tarihindeki kurla hesaplanır. Bu yüzden TL'de kârda olan bir varlık dolar bazında zararda görünebilir.
 - **Simgeler:** Yuvarlak bayrak ve resimler.
-  - BIST için Türk bayrağı, ABD için ABD bayrağı, Emtia için altın külçe.
+  - Türk Market için Türk bayrağı, ABD Market için ABD bayrağı, Emtia için altın külçe.
   - Dövizlerde bayrak çifti (ör. USD/TRY), gümüş için gümüş külçe.
   - Hisse ve kriptolarda dilim rengiyle harf rozeti.
 - **Portföy özeti:** Toplam değer (TL), toplam kâr/zarar, günlük değişim
 - **Varlık türleri:**
-  - BIST hisse (THYAO, ASELS…)
-  - ABD hisse (AAPL…)
+  - Türk Market: Borsa İstanbul hisseleri (THYAO, ASELS…)
+  - ABD Market: ABD hisseleri (AAPL…)
   - Kripto (BTC, ETH…)
   - Döviz (USD, EUR, GBP, CHF)
   - Emtia: gram altın ve gram gümüş
@@ -27,7 +28,7 @@ Expo (React Native) ile yazıldı. Geliştirmek ve App Store'a göndermek için 
 - **Alış/satış kaydı:** Ortalama maliyet ve gerçekleşen kâr/zarar hesaplanır
 - **Fiyatlar:** Otomatik çekilir. Aşağı çekince ve uygulama öne gelince yenilenir.
 - **Kayıt:** Veriler yalnızca telefonda tutulur. Hesap ya da sunucu gerekmez.
-- **Görünüm:** Telefonun ayarına göre gündüz beyaz, gece siyah
+- **Görünüm:** Telefonun ayarına göre gündüz beyaz, gece siyah. Yazı tipi Manrope (₺ ve Türkçe harf destekli).
 
 ## Proje yapısı
 
@@ -38,6 +39,7 @@ src/
     index.tsx           Ana sayfa: halka grafik + liste
     add.tsx             İşlem ekleme
     asset/[key].tsx     Varlık detayı ve işlem geçmişi
+  constants/theme.ts    Renkler, yazı tipi ve yazı stilleri
   components/
     donut-chart.tsx     Dokunulabilir halka grafik
     asset-icon.tsx      Bayraklar, külçeler ve harf rozetleri (SVG)
@@ -59,6 +61,7 @@ npm install          # bağımlılıkları kur
 npm start            # geliştirme sunucusunu başlat (QR kod çıkar)
 npm test             # testleri çalıştır
 npm run typecheck    # tip kontrolü
+npm run lint         # kod denetimi (ESLint)
 npm run format       # kodu biçimlendir
 ```
 

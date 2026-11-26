@@ -3,7 +3,7 @@ import { useMemo, useState, type ReactNode } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { Card, Chip, PrimaryButton, Segmented } from '@/components/ui';
-import { useColors } from '@/constants/theme';
+import { Font, useColors } from '@/constants/theme';
 import { usePortfolio } from '@/context/portfolio-context';
 import {
   ASSET_KINDS,
@@ -59,7 +59,7 @@ export default function AddTransactionScreen() {
   const unitPrice = parseDecimal(price);
   const total = qty > 0 && unitPrice > 0 ? qty * unitPrice : undefined;
 
-  const inputStyle = [styles.input, { color: c.text, backgroundColor: c.chip }];
+  const inputStyle = [styles.input, { color: c.text, backgroundColor: c.background, borderColor: c.border }];
 
   async function fillCurrentPrice() {
     setError(undefined);
@@ -130,7 +130,7 @@ export default function AddTransactionScreen() {
               value={symbolInput}
               onChangeText={setSymbolInput}
               placeholder={info.placeholder}
-              placeholderTextColor={c.textSecondary}
+              placeholderTextColor={c.textTertiary}
               autoCapitalize="characters"
               autoCorrect={false}
               editable={!lockedAsset}
@@ -142,8 +142,8 @@ export default function AddTransactionScreen() {
         <Field label="İşlem">
           <Segmented
             options={[
-              { value: 'buy', label: 'Alış', color: c.positive },
-              { value: 'sell', label: 'Satış', color: c.negative },
+              { value: 'buy', label: 'Alış', color: c.buy },
+              { value: 'sell', label: 'Satış', color: c.sell },
             ]}
             value={side}
             onChange={setSide}
@@ -158,7 +158,7 @@ export default function AddTransactionScreen() {
             value={quantity}
             onChangeText={setQuantity}
             placeholder="0"
-            placeholderTextColor={c.textSecondary}
+            placeholderTextColor={c.textTertiary}
             keyboardType="decimal-pad"
             style={inputStyle}
           />
@@ -172,7 +172,7 @@ export default function AddTransactionScreen() {
                 {fetchingPrice ? (
                   <ActivityIndicator size="small" />
                 ) : (
-                  <Text style={[styles.link, { color: c.tint }]}>Güncel fiyatı kullan</Text>
+                  <Text style={[styles.link, { color: c.link }]}>Güncel fiyatı kullan</Text>
                 )}
               </Pressable>
             ) : undefined
@@ -181,7 +181,7 @@ export default function AddTransactionScreen() {
             value={price}
             onChangeText={setPrice}
             placeholder="0,00"
-            placeholderTextColor={c.textSecondary}
+            placeholderTextColor={c.textTertiary}
             keyboardType="decimal-pad"
             style={inputStyle}
           />
@@ -192,7 +192,7 @@ export default function AddTransactionScreen() {
             value={date}
             onChangeText={setDate}
             placeholder="26.11.2026"
-            placeholderTextColor={c.textSecondary}
+            placeholderTextColor={c.textTertiary}
             keyboardType="numbers-and-punctuation"
             style={inputStyle}
           />
@@ -211,7 +211,7 @@ export default function AddTransactionScreen() {
       <PrimaryButton
         label={side === 'buy' ? 'Alışı kaydet' : 'Satışı kaydet'}
         onPress={save}
-        color={side === 'buy' ? c.positive : c.negative}
+        color={side === 'buy' ? c.buy : c.sell}
       />
     </ScrollView>
   );
@@ -255,20 +255,24 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize: 13,
-    fontWeight: '600',
+    fontFamily: Font.semibold,
+    letterSpacing: 0.2,
   },
   input: {
+    fontFamily: Font.semibold,
     fontSize: 17,
     paddingHorizontal: 14,
-    paddingVertical: 12,
-    borderRadius: 10,
+    paddingVertical: 13,
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
   },
   hint: {
+    fontFamily: Font.medium,
     fontSize: 13,
   },
   link: {
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: Font.semibold,
   },
   totalRow: {
     flexDirection: 'row',
@@ -277,15 +281,17 @@ const styles = StyleSheet.create({
     paddingTop: 14,
   },
   totalLabel: {
+    fontFamily: Font.medium,
     fontSize: 15,
   },
   totalValue: {
-    fontSize: 17,
-    fontWeight: '700',
+    fontSize: 18,
+    fontFamily: Font.extrabold,
+    fontVariant: ['tabular-nums'],
   },
   error: {
     fontSize: 15,
-    fontWeight: '500',
+    fontFamily: Font.medium,
     textAlign: 'center',
   },
 });

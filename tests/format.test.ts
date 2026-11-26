@@ -80,3 +80,9 @@ test('Türkçe büyük harf', () => {
   assert.equal(trUpper('Pozisyon'), 'POZİSYON');
   assert.equal(trUpper('ışık'), 'IŞIK');
 });
+
+test('yüzde ondalık sayısı', () => {
+  assert.equal(formatPct(30.59, { signed: false, decimals: 0 }), '%31');
+  assert.equal(formatPct(8.64, { signed: false, decimals: 1 }), '%8,6');
+  assert.equal(formatPct(0.04, { decimals: 1 }), '%0,0');
+});

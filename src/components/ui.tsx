@@ -1,19 +1,19 @@
 import type { ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 
-import { useColors } from '@/constants/theme';
+import { Radius, Type, useColors } from '@/constants/theme';
 import { trUpper } from '@/lib/format';
 
 export function Card({ children, style }: { children: ReactNode; style?: StyleProp<ViewStyle> }) {
   const c = useColors();
-  return <View style={[styles.card, { backgroundColor: c.card, borderColor: c.border }, style]}>{children}</View>;
+  return <View style={[styles.card, { backgroundColor: c.card }, style]}>{children}</View>;
 }
 
 export function SectionTitle({ children, right }: { children: ReactNode; right?: ReactNode }) {
   const c = useColors();
   return (
     <View style={styles.sectionRow}>
-      <Text style={[styles.sectionTitle, { color: c.textSecondary }]}>
+      <Text style={[Type.overline, { color: c.textSecondary }]}>
         {typeof children === 'string' ? trUpper(children) : children}
       </Text>
       {right}
@@ -32,7 +32,7 @@ export function Chip({ label, selected, onPress }: { label: string; selected: bo
         styles.chip,
         { backgroundColor: selected ? c.tint : c.chip, opacity: pressed ? 0.7 : 1 },
       ]}>
-      <Text style={[styles.chipText, { color: selected ? c.tintText : c.text }]}>{label}</Text>
+      <Text style={[Type.caption, styles.chipText, { color: selected ? c.tintText : c.text }]}>{label}</Text>
     </Pressable>
   );
 }
@@ -57,8 +57,8 @@ export function Segmented<T extends string>({
             onPress={() => onChange(o.value)}
             accessibilityRole="button"
             accessibilityState={{ selected }}
-            style={[styles.segment, selected && { backgroundColor: o.color ?? c.card }]}>
-            <Text style={[styles.segmentText, { color: selected ? (o.color ? '#FFFFFF' : c.text) : c.textSecondary }]}>
+            style={[styles.segment, selected && { backgroundColor: o.color ?? c.background }]}>
+            <Text style={[Type.bodyStrong, { color: selected ? (o.color ? '#FFFFFF' : c.text) : c.textSecondary }]}>
               {o.label}
             </Text>
           </Pressable>
@@ -87,9 +87,9 @@ export function PrimaryButton({
       accessibilityRole="button"
       style={({ pressed }) => [
         styles.primary,
-        { backgroundColor: color ?? c.tint, opacity: disabled ? 0.4 : pressed ? 0.8 : 1 },
+        { backgroundColor: color ?? c.tint, opacity: disabled ? 0.35 : pressed ? 0.85 : 1 },
       ]}>
-      <Text style={styles.primaryText}>{label}</Text>
+      <Text style={[Type.headline, styles.primaryText]}>{label}</Text>
     </Pressable>
   );
 }
@@ -98,76 +98,59 @@ export function StatRow({ label, value, valueColor }: { label: string; value: st
   const c = useColors();
   return (
     <View style={styles.statRow}>
-      <Text style={[styles.statLabel, { color: c.textSecondary }]}>{label}</Text>
-      <Text style={[styles.statValue, { color: valueColor ?? c.text }]}>{value}</Text>
+      <Text style={[Type.body, { color: c.textSecondary }]}>{label}</Text>
+      <Text style={[Type.number, styles.statValue, { color: valueColor ?? c.text }]}>{value}</Text>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   card: {
-    borderRadius: 16,
+    borderRadius: Radius.lg,
     padding: 16,
-    borderWidth: StyleSheet.hairlineWidth,
   },
   sectionRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginTop: 8,
+    marginTop: 14,
     marginBottom: 8,
     paddingHorizontal: 4,
   },
-  sectionTitle: {
-    fontSize: 13,
-    fontWeight: '600',
-    letterSpacing: 0.5,
-  },
   chip: {
     paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 999,
+    paddingVertical: 9,
+    borderRadius: Radius.pill,
   },
   chipText: {
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 13,
   },
   segmented: {
     flexDirection: 'row',
-    borderRadius: 10,
-    padding: 3,
+    borderRadius: Radius.md,
+    padding: 4,
   },
   segment: {
     flex: 1,
     alignItems: 'center',
-    paddingVertical: 9,
-    borderRadius: 8,
-  },
-  segmentText: {
-    fontSize: 15,
-    fontWeight: '600',
+    paddingVertical: 10,
+    borderRadius: Radius.sm,
   },
   primary: {
-    borderRadius: 14,
-    paddingVertical: 15,
+    borderRadius: Radius.md,
+    paddingVertical: 16,
     alignItems: 'center',
   },
   primaryText: {
     color: '#FFFFFF',
-    fontSize: 17,
-    fontWeight: '700',
+    fontSize: 16,
   },
   statRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingVertical: 8,
-  },
-  statLabel: {
-    fontSize: 15,
+    paddingVertical: 9,
   },
   statValue: {
     fontSize: 15,
-    fontWeight: '600',
-    fontVariant: ['tabular-nums'],
   },
 });
