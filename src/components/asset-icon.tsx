@@ -313,6 +313,12 @@ export function CategoryIcon({ kind, size }: { kind: AssetKind; size: number }) 
       );
     case 'fx':
       return <PairIcon main="USD" second="EUR" size={size} />;
+    case 'etf':
+      return (
+        <Round size={size}>
+          <TextBadge bg="#15AABF" text="ETF" />
+        </Round>
+      );
     case 'fund':
       return (
         <Round size={size}>

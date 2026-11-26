@@ -15,6 +15,7 @@ type FetchLike = (
   ok: boolean;
   status: number;
   json(): Promise<unknown>;
+  text?(): Promise<string>;
 }>;
 
 /** Yahoo "chart" yanıtından fiyatı çıkarır; beklenmeyen biçimde null döner. */
@@ -289,4 +290,50 @@ export async function fetchAnyQuotes(
     yahoo.length ? fetchQuotesBatched(yahoo, fetchFn, fallbackLimit) : Promise.resolve({}),
   ]);
   return { ...a, ...b };
+}
+
+// ---------------------------------------------------------------------------
+// Enflasyon: TÜİK TÜFE (aylık endeks, 2015=100), OECD istatistik servisi üzerinden
+
+const OECD_CPI = 'https://sdmx.oecd.org/public/rest/data/OECD.SDD.TPS,DSD_PRICES@DF_PRICES_ALL,/TUR.M.N.CPI.IX._T.N._Z';
+
+/** OECD CSV yanıtından aylık TÜFE serisi; tarihler ayın ilk günü ("2025-12-01"). */
+export function parseOecdCpiCsv(text: string, now: number = Date.now()): FxSeries | null {
+  const lines = text.trim().split(/\r?\n/);
+  if (lines.length < 2) return null;
+  const head = lines[0].split(',');
+  const ti = head.indexOf('TIME_PERIOD');
+  const vi = head.indexOf('OBS_VALUE');
+  if (ti < 0 || vi < 0) return null;
+  const points = new Map<string, number>();
+  for (const line of lines.slice(1)) {
+    const cells = line.split(',');
+    const period = cells[ti];
+    const value = Number(cells[vi]);
+    if (/^\d{4}-\d{2}$/.test(period ?? '') && Number.isFinite(value) && value > 0) points.set(`${period}-01`, value);
+  }
+  if (points.size === 0) return null;
+  const dates = [...points.keys()].sort();
+  return { dates, rates: dates.map((d) => points.get(d)!), fetchedAt: now };
+}
+
+export async function fetchTurkeyCpi(
+  startYear: number,
+  fetchFn: FetchLike = fetch as unknown as FetchLike,
+): Promise<FxSeries> {
+  const url = `${OECD_CPI}?startPeriod=${startYear}-01&dimensionAtObservation=AllDimensions&format=csvfile`;
+  let lastError: unknown;
+  // Servis ara sıra 5xx dönüyor; bir kez daha denenir.
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const res = await fetchWithTimeout(fetchFn, url);
+      if (!res.ok || !res.text) throw new Error(`HTTP ${res.status}`);
+      const series = parseOecdCpiCsv(await res.text());
+      if (!series) throw new Error('TÜFE verisi okunamadı');
+      return series;
+    } catch (e) {
+      lastError = e;
+    }
+  }
+  throw lastError;
 }

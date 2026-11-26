@@ -175,7 +175,7 @@ export default function AddTransactionScreen() {
               autoCorrect={false}
               style={inputStyle}
             />
-            {kind !== 'other' && symbol.length >= (kind === 'us' ? 1 : kind === 'crypto' ? 2 : 3) && (
+            {kind !== 'other' && symbol.length >= (kind === 'us' || kind === 'etf' ? 1 : kind === 'crypto' ? 2 : 3) && (
               <Text style={[styles.hint, { color: listed ? c.textSecondary : c.textTertiary }]}>
                 {listed?.name ?? 'Bu kod listede yok; fiyatı alınabiliyorsa yine eklenir.'}
               </Text>

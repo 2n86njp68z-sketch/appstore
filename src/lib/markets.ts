@@ -1,5 +1,6 @@
 import { BIST_STOCKS } from '../data/bist';
 import { CRYPTO_COINS } from '../data/crypto';
+import { US_ETFS } from '../data/etf';
 import { BES_FUNDS, TEFAS_FUNDS } from '../data/funds';
 import { US_STOCKS } from '../data/us';
 import { COMMODITIES, quoteSymbolFor, USDTRY_SYMBOL, assetCurrency, commodityInfo } from './assets';
@@ -19,7 +20,7 @@ export interface MarketStock {
   exchange?: string;
 }
 
-export type MarketKey = 'bist' | 'us' | 'metal' | 'fund' | 'bes' | 'crypto';
+export type MarketKey = 'bist' | 'us' | 'etf' | 'metal' | 'fund' | 'bes' | 'crypto';
 
 export interface MarketDef {
   key: MarketKey;
@@ -61,6 +62,7 @@ function market(key: MarketKey, kind: AssetKind, title: string, stocks: readonly
 export const MARKETS: Record<MarketKey, MarketDef> = {
   bist: market('bist', 'bist', 'Türk Market', BIST_STOCKS),
   us: market('us', 'us', 'ABD Market', US_STOCKS),
+  etf: market('etf', 'etf', 'ABD ETF', US_ETFS),
   metal: market('metal', 'metal', 'Emtia', COMMODITY_STOCKS),
   fund: market('fund', 'fund', 'TEFAS', TEFAS_FUNDS, true),
   bes: market('bes', 'bes', 'BES', BES_FUNDS, true),
@@ -70,6 +72,7 @@ export const MARKETS: Record<MarketKey, MarketDef> = {
 const KIND_TO_MARKET: Partial<Record<AssetKind, MarketKey>> = {
   bist: 'bist',
   us: 'us',
+  etf: 'etf',
   metal: 'metal',
   fund: 'fund',
   bes: 'bes',

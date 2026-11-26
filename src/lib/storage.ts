@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+import type { BenchSeries } from './benchmarks';
 import type { DisplayCurrency, FxHistory, RawQuote, Transaction } from './types';
 
 const KEYS = {
@@ -7,6 +8,7 @@ const KEYS = {
   manualPrices: 'portfoy/manualPrices/v1',
   quotes: 'portfoy/quotes/v1',
   fxHistory: 'portfoy/fxHistory/v1',
+  benchSeries: 'portfoy/benchSeries/v1',
   displayCurrency: 'portfoy/displayCurrency/v1',
 } as const;
 
@@ -15,6 +17,7 @@ export interface StoredData {
   manualPrices: Record<string, number>;
   quotes: Record<string, RawQuote>;
   fxHistory: FxHistory;
+  benchSeries: BenchSeries;
   displayCurrency: DisplayCurrency;
 }
 
@@ -28,18 +31,20 @@ async function readJson<T>(key: string, fallback: T): Promise<T> {
 }
 
 export async function loadAll(): Promise<StoredData> {
-  const [transactions, manualPrices, quotes, fxHistory, displayCurrency] = await Promise.all([
+  const [transactions, manualPrices, quotes, fxHistory, displayCurrency, benchSeries] = await Promise.all([
     readJson<Transaction[]>(KEYS.transactions, []),
     readJson<Record<string, number>>(KEYS.manualPrices, {}),
     readJson<Record<string, RawQuote>>(KEYS.quotes, {}),
     readJson<FxHistory>(KEYS.fxHistory, {}),
     readJson<DisplayCurrency>(KEYS.displayCurrency, 'TRY'),
+    readJson<BenchSeries>(KEYS.benchSeries, {}),
   ]);
   return {
     transactions: Array.isArray(transactions) ? transactions : [],
     manualPrices,
     quotes,
     fxHistory,
+    benchSeries,
     displayCurrency: ['TRY', 'USD', 'EUR'].includes(displayCurrency) ? displayCurrency : 'TRY',
   };
 }
@@ -62,4 +67,8 @@ export function saveFxHistory(history: FxHistory) {
 
 export function saveDisplayCurrency(currency: DisplayCurrency) {
   return AsyncStorage.setItem(KEYS.displayCurrency, JSON.stringify(currency));
+}
+
+export function saveBenchSeries(series: BenchSeries) {
+  return AsyncStorage.setItem(KEYS.benchSeries, JSON.stringify(series));
 }

@@ -8,6 +8,7 @@
 Kullanım (internet erişimi gerekir):
   python3 -I scripts/fetch-us-sources.py <çıktı_klasörü>
   python3 -I scripts/build-us-data.py <çıktı_klasörü>/us-stocks.json <çıktı_klasörü>/us-sites.json > src/data/us.ts
+  python3 -I scripts/build-etf-data.py <çıktı_klasörü>/us-etfs.json > src/data/etf.ts
 """
 import json
 import os
@@ -57,24 +58,29 @@ def rows(text):
 
 
 def nasdaq_trader():
-    out = {}
+    """(hisseler, ETF'ler) döndürür."""
+    out, etfs = {}, {}
+    ex_names = {'N': 'NYSE', 'A': 'NYSE American', 'P': 'NYSE Arca', 'Z': 'Cboe BZX', 'V': 'IEX'}
     for r in rows(get(NASDAQ)):
         sym, name = r['Symbol'].strip(), r['Security Name'].strip()
+        if r['Test Issue'] == 'N' and r['ETF'] == 'Y' and re.fullmatch(r'[A-Z]{1,5}', sym):
+            etfs[sym] = {'code': sym, 'name': re.sub(r'\s+', ' ', name), 'exchange': 'NASDAQ'}
         if r['Test Issue'] == 'Y' or r['ETF'] == 'Y' or r.get('NextShares') == 'Y':
             continue
         if not re.fullmatch(r'[A-Z]{1,5}', sym) or NOT_STOCK.search(name):
             continue
         out[sym] = {'code': sym, 'name': clean_name(name, sym), 'exchange': 'NASDAQ'}
-    ex_names = {'N': 'NYSE', 'A': 'NYSE American', 'P': 'NYSE Arca', 'Z': 'Cboe BZX', 'V': 'IEX'}
     for r in rows(get(OTHER)):
         sym, name = r['ACT Symbol'].strip(), r['Security Name'].strip()
+        if r['Test Issue'] == 'N' and r['ETF'] == 'Y' and re.fullmatch(r'[A-Z]{1,5}(\.[A-Z])?', sym):
+            etfs.setdefault(sym, {'code': sym, 'name': re.sub(r'\s+', ' ', name), 'exchange': ex_names.get(r['Exchange'], r['Exchange'])})
         if r['Test Issue'] == 'Y' or r['ETF'] == 'Y':
             continue
         # Hisse sınıfları "BRK.B" biçiminde; $, = ve diğer ekler imtiyazlı/varant/birimdir.
         if not re.fullmatch(r'[A-Z]{1,5}(\.[A-Z])?', sym) or NOT_STOCK.search(name):
             continue
         out.setdefault(sym, {'code': sym, 'name': clean_name(name, sym), 'exchange': ex_names.get(r['Exchange'], r['Exchange'])})
-    return sorted(out.values(), key=lambda s: s['code'])
+    return sorted(out.values(), key=lambda s: s['code']), sorted(etfs.values(), key=lambda s: s['code'])
 
 
 # Borsalar: NASDAQ, NYSE, NYSE American. Ağır tek sorgu zaman aşımına uğruyor; borsa başına iki hafif sorgu.
@@ -103,9 +109,10 @@ def wikidata_sites():
 if __name__ == '__main__':
     out_dir = sys.argv[1]
     os.makedirs(out_dir, exist_ok=True)
-    stocks = nasdaq_trader()
+    stocks, etfs = nasdaq_trader()
     json.dump(stocks, open(os.path.join(out_dir, 'us-stocks.json'), 'w'), ensure_ascii=False, indent=0)
-    print('NASDAQ Trader:', len(stocks), 'hisse', flush=True)
+    json.dump(etfs, open(os.path.join(out_dir, 'us-etfs.json'), 'w'), ensure_ascii=False, indent=0)
+    print('NASDAQ Trader:', len(stocks), 'hisse,', len(etfs), 'ETF', flush=True)
     sites = wikidata_sites()
     json.dump(sites, open(os.path.join(out_dir, 'us-sites.json'), 'w'), ensure_ascii=False, indent=0)
     print('Wikidata:', len(sites), 'kod için internet adresi;', sum(1 for s in stocks if s['code'] in sites), 'listede eşleşti', flush=True)

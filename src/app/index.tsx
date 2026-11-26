@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 
 import { AssetIcon, CategoryIcon } from '@/components/asset-icon';
+import { BenchmarkCard } from '@/components/benchmark-card';
 import { DonutChart } from '@/components/donut-chart';
 import { DrawerButton } from '@/components/market-drawer';
 import { PrimaryButton } from '@/components/ui';
@@ -32,8 +33,18 @@ function tick() {
 export default function PortfolioScreen() {
   const c = useColors();
   const { width } = useWindowDimensions();
-  const { ready, holdings, summary, refreshing, refresh, lastUpdated, error, displayCurrency, cycleDisplayCurrency } =
-    usePortfolio();
+  const {
+    ready,
+    holdings,
+    summary,
+    benchmarks,
+    refreshing,
+    refresh,
+    lastUpdated,
+    error,
+    displayCurrency,
+    cycleDisplayCurrency,
+  } = usePortfolio();
   const [openKind, setOpenKind] = useState<AssetKind>();
   const [selectedAsset, setSelectedAsset] = useState<string>();
 
@@ -193,20 +204,23 @@ export default function PortfolioScreen() {
               </View>
             )}
 
-            <View style={styles.stats}>
-              <StatCard
-                label="Toplam K/Z"
-                value={formatMoney(totals.pnl, cur, { signed: true })}
-                pct={formatPct(totals.pnlPct)}
-                tone={totals.pnl}
-              />
-              <StatCard
+            <View style={[styles.pnlCard, { backgroundColor: c.card }]}>
+              <PnlCell
                 label="Bugün"
                 value={formatMoney(totals.dayChange, cur, { signed: true })}
                 pct={formatPct(totals.dayChangePct)}
                 tone={totals.dayChange}
               />
+              <View style={[styles.pnlDivider, { backgroundColor: c.border }]} />
+              <PnlCell
+                label="Toplam"
+                value={formatMoney(totals.pnl, cur, { signed: true })}
+                pct={formatPct(totals.pnlPct)}
+                tone={totals.pnl}
+              />
             </View>
+
+            {!openCat && <BenchmarkCard results={benchmarks} />}
 
             <View style={styles.listHeader}>
               <Text style={[Type.title, { color: c.text }]}>{openCat ? kindInfo(openCat.kind).label : 'Dağılım'}</Text>
@@ -284,18 +298,19 @@ function CurrencySwitch({ active }: { active: DisplayCurrency }) {
   );
 }
 
-function StatCard({ label, value, pct, tone }: { label: string; value: string; pct: string; tone: number }) {
+/** Kâr/zarar kartındaki tek sütun: küçük başlık, altında tutar ve yüzde yan yana. */
+function PnlCell({ label, value, pct, tone }: { label: string; value: string; pct: string; tone: number }) {
   const c = useColors();
   const color = pnlColor(c, tone);
   return (
-    <View style={[styles.statCard, { backgroundColor: c.card }]}>
-      <Text style={[Type.subhead, { color: c.textSecondary }]}>{label}</Text>
-      <Text style={[Type.headline, styles.tabular, styles.statValue, { color }]} numberOfLines={1} adjustsFontSizeToFit>
-        {value}
-      </Text>
-      <View style={[styles.pnlPill, styles.statPill, { backgroundColor: pnlSoft(c, tone) }]}>
+    <View style={styles.pnlCell}>
+      <View style={styles.pnlLine}>
+        <Text style={[Type.overline, { color: c.textSecondary, fontSize: 10 }]}>{trUpper(label)}</Text>
         <Text style={[Type.caption, styles.tabular, { color }]}>{pct}</Text>
       </View>
+      <Text style={[Type.headline, styles.tabular, styles.pnlValue, { color }]} numberOfLines={1} adjustsFontSizeToFit>
+        {value}
+      </Text>
     </View>
   );
 }
@@ -534,24 +549,31 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  stats: {
+  pnlCard: {
     flexDirection: 'row',
-    gap: 12,
-    marginTop: 20,
+    alignItems: 'center',
+    borderRadius: Radius.md,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    marginTop: 18,
   },
-  statCard: {
+  pnlCell: {
     flex: 1,
-    borderRadius: Radius.lg,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+    gap: 3,
   },
-  statValue: {
-    fontSize: 18,
-    marginTop: 6,
+  pnlDivider: {
+    width: StyleSheet.hairlineWidth,
+    alignSelf: 'stretch',
+    marginHorizontal: 14,
   },
-  statPill: {
-    alignSelf: 'flex-start',
-    marginTop: 8,
+  pnlLine: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 6,
+  },
+  pnlValue: {
+    fontSize: 16,
   },
   listHeader: {
     flexDirection: 'row',

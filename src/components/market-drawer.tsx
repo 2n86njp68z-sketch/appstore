@@ -93,6 +93,9 @@ export function DrawerButton() {
 
 const QUOTE_TTL_MS = 2 * 60 * 1000;
 
+/** Arama ya da bölüm açılışında fiyatı hemen istenen satır sayısı (ekranı dolduracak kadar). */
+const FIRST_ROWS = 20;
+
 function useVisibleQuotes(seed: Record<string, RawQuote>) {
   const [quotes, setQuotes] = useState<Record<string, RawQuote>>({});
   const quotesRef = useRef(quotes);
@@ -167,7 +170,7 @@ const SECTION_DEFS: { key: string; title: string; kind?: AssetKind; market?: Mar
   { key: 'fund', title: 'TEFAS', kind: 'fund', market: 'fund' },
   { key: 'bes', title: 'BES', kind: 'bes', market: 'bes' },
   { key: 'crypto', title: 'Kripto', kind: 'crypto', market: 'crypto' },
-  { key: 'etf', title: 'ABD ETF' },
+  { key: 'etf', title: 'ABD ETF', kind: 'etf', market: 'etf' },
 ];
 
 const MARKET_KEYS = SECTION_DEFS.map((d) => d.market).filter(Boolean) as MarketKey[];
@@ -299,6 +302,26 @@ function MarketDrawer({ open, onClose }: { open: boolean; onClose: () => void })
     }
     if (symbols.length) requestRef.current(symbols);
   }, []);
+
+  // Arama sonucu değişince ya da bir bölüm açılınca ilk satırların fiyatı hemen istenir: liste verisi
+  // değiştiğinde görünürlük bildirimi her zaman gelmiyor (özellikle web'de).
+  useEffect(() => {
+    if (!open) return;
+    const defs = results ? SECTION_DEFS : SECTION_DEFS.filter((d) => d.key === expanded);
+    const lists = defs.flatMap((d) =>
+      d.market && !MARKETS[d.market].manual
+        ? [[d.market, results ? results[d.market] : MARKETS[d.market].stocks] as const]
+        : [],
+    );
+    const symbols: string[] = [];
+    let budget = FIRST_ROWS;
+    for (const [m, list] of lists) {
+      for (const stock of list.slice(0, budget)) symbols.push(...MARKETS[m].quoteKeys(stock.code));
+      budget -= Math.min(budget, list.length);
+      if (budget === 0) break;
+    }
+    if (symbols.length) request(symbols);
+  }, [open, results, expanded, request]);
 
   // Kripto açılınca tüm listenin fiyatı bir kerede (100'lük gruplarla) alınır; CoinGecko'nun ücretsiz
   // servisi dakikalık istek sınırı uyguladığı için kaydırdıkça ayrı ayrı istemekten daha güvenli.

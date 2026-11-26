@@ -1,0 +1,157 @@
+import assert from 'node:assert/strict';
+import { test } from 'node:test';
+
+import { quoteSymbolFor } from '../src/lib/assets';
+import { computeBenchmarks, simulate, type BenchSeries } from '../src/lib/benchmarks';
+import { MARKETS, stockInfo } from '../src/lib/markets';
+import { FxRates } from '../src/lib/portfolio';
+import { fetchTurkeyCpi, parseOecdCpiCsv } from '../src/lib/prices';
+import type { FxHistory, FxSeries, RawQuote, Transaction } from '../src/lib/types';
+
+const close = (a: number, b: number, eps = 1e-6) => assert.ok(Math.abs(a - b) < eps, `${a} ≈ ${b}`);
+
+const series = (points: Record<string, number>): FxSeries => {
+  const dates = Object.keys(points).sort();
+  return { dates, rates: dates.map((d) => points[d]), fetchedAt: 1 };
+};
+
+let id = 0;
+const tx = (t: Partial<Transaction>): Transaction => ({
+  id: String(++id),
+  kind: 'bist',
+  symbol: 'THYAO',
+  side: 'buy',
+  quantity: 1,
+  price: 100,
+  date: '2026-01-05',
+  createdAt: id,
+  ...t,
+});
+
+const raw: Record<string, RawQuote> = {
+  'USDTRY=X': { price: 40, fetchedAt: 1 },
+  'EURTRY=X': { price: 45, fetchedAt: 1 },
+  'XU100.IS': { price: 12000, fetchedAt: 1 },
+  '^SP500TR': { price: 15000, fetchedAt: 1 },
+};
+const fxHistory: FxHistory = { USD: series({ '2026-01-05': 30, '2026-03-02': 35 }) };
+const bench: BenchSeries = {
+  'XU100.IS': series({ '2026-01-05': 10000, '2026-03-02': 8000 }),
+  '^SP500TR': series({ '2026-01-05': 12000, '2026-03-02': 15000 }),
+  CPI: series({ '2025-10-01': 100, '2025-11-01': 110, '2025-12-01': 121 }),
+};
+
+test('simulate: her alışta o günün fiyatından pay alınır, satışta pay düşülür', () => {
+  const fx = new FxRates(raw, fxHistory);
+  const prices: Record<string, number> = { '2026-01-05': 10, '2026-02-02': 20, '2026-03-02': 25 };
+  const txs = [
+    tx({ quantity: 10, price: 100, date: '2026-01-05' }), // 1000 TL → 100 pay
+    tx({ quantity: 10, price: 100, date: '2026-02-02' }), // 1000 TL → 50 pay
+    tx({ side: 'sell', quantity: 5, price: 100, date: '2026-03-02' }), // 500 TL → −20 pay
+  ];
+  close(
+    simulate(txs, fx, (d) => prices[d], 30)!,
+    (100 + 50 - 20) * 30,
+  );
+  assert.equal(
+    simulate(txs, fx, (d) => (d === '2026-02-02' ? undefined : prices[d]), 30),
+    undefined,
+    'fiyatı bilinmeyen gün varsa sonuç yok',
+  );
+});
+
+test('simulate: dolarlı varlık işlem günündeki kurla TL tutara çevrilir', () => {
+  const fx = new FxRates(raw, fxHistory);
+  const usTx = tx({ kind: 'us', symbol: 'AAPL', quantity: 2, price: 50, date: '2026-01-05' }); // 100 $ × 30 = 3000 TL
+  close(
+    simulate([usTx], fx, () => 10, 12)!,
+    (3000 / 10) * 12,
+  );
+});
+
+test('computeBenchmarks: BIST 100, S&P 500 TR (TL bazında) ve TÜFE', () => {
+  const txs = [tx({ quantity: 10, price: 100, date: '2026-01-05' })]; // 1000 TL
+  // TÜFE için 2025'te bir alış daha
+  const withOld = [...txs, tx({ quantity: 10, price: 100, date: '2025-10-15' })];
+  const res = computeBenchmarks(withOld, 3000, raw, fxHistory, bench);
+  const by = Object.fromEntries(res.map((r) => [r.key, r]));
+  assert.deepEqual(
+    res.map((r) => r.key),
+    ['bist100', 'sp500tr', 'cpi'],
+  );
+
+  // BIST 100: 2025-10-15 serinin başından önce → ilk fiyat (10000); bugün 12000
+  close(by.bist100.value, (1000 / 10000 + 1000 / 10000) * 12000);
+  close(by.bist100.diffPct, (3000 / by.bist100.value - 1) * 100);
+
+  // S&P 500 TR: fiyat × o günkü kur; bugün 15000 × 40
+  const spUnits = 1000 / (12000 * 30) + 1000 / (12000 * 30);
+  close(by.sp500tr.value, spUnits * 15000 * 40);
+
+  // TÜFE: Ekim 2025 alışı 100 → 121; Ocak 2026 alışı son açıklanan aydan sonra, tutar aynen kalır
+  close(by.cpi.value, 1000 * 1.21 + 1000);
+  assert.equal(by.cpi.asOf, '2025-12');
+  assert.equal(by.cpi.partial, true);
+  assert.equal(by.cpi.missing, undefined);
+});
+
+test('computeBenchmarks: tüm alışlar son TÜFE ayından sonraysa enflasyon "veri yok"', () => {
+  const res = computeBenchmarks([tx({ date: '2026-02-10' })], 120, raw, fxHistory, bench);
+  const cpi = res.find((r) => r.key === 'cpi')!;
+  assert.equal(cpi.missing, true);
+  assert.equal(cpi.asOf, '2025-12');
+});
+
+test('computeBenchmarks: işlem yoksa veya seri eksikse ölçüt gösterilmez', () => {
+  assert.deepEqual(computeBenchmarks([], 0, raw, fxHistory, bench), []);
+  const res = computeBenchmarks([tx({})], 100, raw, fxHistory, { 'XU100.IS': bench['XU100.IS'] });
+  assert.deepEqual(
+    res.map((r) => r.key),
+    ['bist100'],
+  );
+  // Güncel fiyat yoksa serinin son değeri kullanılır
+  const { 'XU100.IS': _x, ...noNow } = raw;
+  void _x;
+  const [r] = computeBenchmarks([tx({})], 100, noNow, fxHistory, { 'XU100.IS': bench['XU100.IS'] });
+  close(r.value, (100 / 10000) * 8000);
+});
+
+const CSV = `DATAFLOW,REF_AREA,FREQ,METHODOLOGY,MEASURE,UNIT_MEASURE,EXPENDITURE,ADJUSTMENT,TRANSFORMATION,TIME_PERIOD,OBS_VALUE,OBS_STATUS
+OECD.SDD.TPS:DSD_PRICES@DF_PRICES_ALL(1.0),TUR,M,N,CPI,IX,_T,N,_Z,2025-12,1348.454,A
+OECD.SDD.TPS:DSD_PRICES@DF_PRICES_ALL(1.0),TUR,M,N,CPI,IX,_T,N,_Z,2025-11,1336.1,A
+OECD.SDD.TPS:DSD_PRICES@DF_PRICES_ALL(1.0),TUR,M,N,CPI,IX,_T,N,_Z,2025,1200,A
+OECD.SDD.TPS:DSD_PRICES@DF_PRICES_ALL(1.0),TUR,M,N,CPI,IX,_T,N,_Z,2025-10,,A
+`;
+
+test('OECD TÜFE CSV: aylık seri, sıralı, boş ve yıllık satırlar atlanır', () => {
+  const s = parseOecdCpiCsv(CSV, 7)!;
+  assert.deepEqual(s.dates, ['2025-11-01', '2025-12-01']);
+  assert.deepEqual(s.rates, [1336.1, 1348.454]);
+  assert.equal(s.fetchedAt, 7);
+  assert.equal(parseOecdCpiCsv('a,b\n1,2'), null);
+  assert.equal(parseOecdCpiCsv(''), null);
+});
+
+test('fetchTurkeyCpi: başlangıç yılıyla ister, geçici hatada bir kez daha dener', async () => {
+  const calls: string[] = [];
+  const fn = async (url: string) => {
+    calls.push(url);
+    if (calls.length === 1) return { ok: false, status: 500, json: async () => ({}), text: async () => '' };
+    return { ok: true, status: 200, json: async () => ({}), text: async () => CSV };
+  };
+  const s = await fetchTurkeyCpi(2024, fn);
+  assert.equal(calls.length, 2);
+  assert.match(calls[0], /TUR\.M\.N\.CPI\.IX/);
+  assert.match(calls[0], /startPeriod=2024-01/);
+  assert.equal(s.dates.at(-1), '2025-12-01');
+});
+
+test('ABD ETF listesi: binlerce fon, Yahoo sembolü, ihraççı sitesi', () => {
+  assert.ok(MARKETS.etf.stocks.length > 4000, `${MARKETS.etf.stocks.length} ETF`);
+  const spy = stockInfo('etf', 'SPY')!;
+  assert.match(spy.name, /S&P 500/);
+  assert.match(spy.website ?? '', /ssga\.com/);
+  assert.deepEqual(MARKETS.etf.quoteKeys('SPY'), ['SPY']);
+  assert.equal(quoteSymbolFor('etf', 'QQQ'), 'QQQ');
+  assert.equal(MARKETS.etf.currencyOf('SPY'), 'USD');
+});

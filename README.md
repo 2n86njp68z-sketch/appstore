@@ -19,7 +19,7 @@ Expo (React Native) ile yazıldı. Geliştirmek ve App Store'a göndermek için 
   - Hisse ve kriptolarda dilim rengiyle harf rozeti.
 - **Piyasalar menüsü (sol üstteki ☰):**
   - En üstte arama çubuğu var. Kod ya da şirket adı yazdıkça sonuçlar anında süzülür, Türkçe harf farkı önemli değildir.
-  - Bölümler: Türk Market, ABD Market, Emtia, TEFAS, BES, Kripto, ABD ETF. ABD ETF dışındakiler hazır, ABD ETF "yakında".
+  - Bölümler: Türk Market, ABD Market, Emtia, TEFAS, BES, Kripto, ABD ETF.
   - Bölüme dokununca kalemler alt alta açılır. Aynı anda tek bölüm açık kalır.
     - Türk Market: BIST'teki 629 hisse
     - ABD Market: NASDAQ, NYSE ve NYSE American'daki 5.866 hisse (ADR'ler dahil; ETF, varant ve imtiyazlı paylar hariç)
@@ -27,11 +27,17 @@ Expo (React Native) ile yazıldı. Geliştirmek ve App Store'a göndermek için 
     - TEFAS: 2.106 yatırım fonu
     - BES: 288 emeklilik yatırım fonu
     - Kripto: piyasa değerine göre ilk 491 coin
+    - ABD ETF: ABD borsalarındaki 5.830 ETF; en bilinenler (SPY, VOO, IVV, QQQ…) en üstte, logolar çıkaran şirketin sitesinden
   - Her satırda logo, kod, şirket adı, fiyat ve günlük değişim yazar.
-  - Arama iki piyasada birden yapılır.
-  - Fiyatlar yalnız ekranda görünen hisseler için 20'li gruplar halinde çekilir.
+  - Arama tüm bölümlerde birden yapılır.
+  - Fiyatlar yalnız ekranda görünen kalemler için 20'li gruplar halinde çekilir.
   - Hisseye dokununca güncel fiyatı dolu işlem ekleme ekranı açılır. Eklenen hisse portföyde de logosuyla görünür.
-- **Portföy özeti:** Toplam değer (TL), toplam kâr/zarar, günlük değişim
+- **Kâr/zarar:** Halkanın altındaki ince kartta yan yana "Bugün" (günlük) ve "Toplam" kâr/zarar, tutar ve yüzde olarak.
+- **Karşılaştırma:** Portföy üç ölçütle karşılaştırılır. Her alış, aynı gün aynı TL tutarıyla ölçüte yatırılmış gibi hesaplanır, satışlar da aynı şekilde düşülür (yalnız bir günü değil, tüm geçmişi karşılaştırır).
+  - Sonuç yüzde olarak yazar: "+%12" portföyün ölçütten %12 önde olduğunu, "−%5" geride olduğunu gösterir. Altında "ölçütü alsaydın bugün ne olurdu" tutarı yazar.
+  - BIST 100: XU100 fiyat endeksi. Temettüler dahil getiri endeksi ücretsiz bir kaynakta bulunmadığı için temettüler hariçtir (kartta yazar).
+  - S&P 500: temettüler dahil getiri endeksi (^SP500TR), her günün dolar kuruyla TL'ye çevrilir.
+  - Enflasyon: TÜİK TÜFE (aylık endeks), OECD istatistik servisinden. Son açıklanan aydan sonraki alışlar için enflasyon henüz bilinmediğinden tutar olduğu gibi alınır; kartta verinin hangi aya kadar olduğu yazar.
 - **Varlık türleri:**
   - Türk Market: Borsa İstanbul hisseleri (THYAO, ASELS…)
   - ABD Market: ABD hisseleri (AAPL, BRK.B…)
@@ -56,18 +62,20 @@ src/
     asset/[key].tsx     Varlık detayı ve işlem geçmişi
   constants/theme.ts    Renkler, yazı tipi ve yazı stilleri
   components/
-    market-drawer.tsx   Sol menü: arama, bölümler, Türk Market listesi
+    market-drawer.tsx   Sol menü: arama, bölümler, piyasa listeleri
+    benchmark-card.tsx  Ana sayfadaki karşılaştırma kartı
     company-logo.tsx    Şirket logosu (sitesinden), yoksa harf rozeti
     donut-chart.tsx     Dokunulabilir halka grafik
     asset-icon.tsx      Bayraklar, külçeler ve harf rozetleri (SVG)
     ui.tsx              Ortak bileşenler (kart, buton…)
   context/              Uygulama durumu, kayıt ve fiyat yenileme
-  data/                 BIST, ABD, fon ve kripto listeleri (üretilmiş dosyalar)
+  data/                 BIST, ABD, ETF, fon ve kripto listeleri (üretilmiş dosyalar)
   lib/
     markets.ts          Piyasalar, hisse arama ve logo adresleri
     portfolio.ts        Hesaplamalar (ortalama maliyet, K/Z, TL/USD/EUR toplamlar)
+    benchmarks.ts       BIST 100, S&P 500 ve enflasyon karşılaştırması
     donut.ts            Grafik dilimleri, renkler ve dokunma hesabı
-    prices.ts           Fiyat ve geçmiş kur çekme (Yahoo Finance)
+    prices.ts           Fiyat, geçmiş kur ve TÜFE çekme (Yahoo Finance, CoinGecko, OECD)
     format.ts           Türkçe sayı/tarih biçimleri
     assets.ts           Varlık türleri ve semboller
 tests/                  Birim testleri
@@ -78,10 +86,12 @@ tests/                  Birim testleri
 - Hisse listeleri ücretsiz ve herkese açık kaynaklardan üretilir:
   - `src/data/bist.ts`: hisse kodu, adı ve sektörü **İş Yatırım**'dan, internet adresi **KAP**'tan
   - `src/data/us.ts`: kod, ad ve borsa **NASDAQ Trader** sembol dizininden, internet adresi **Wikidata**'dan (CC0)
+  - `src/data/etf.ts`: ETF'ler yine **NASDAQ Trader** dizininden; logo için çıkaran şirketin (iShares, Vanguard, SPDR…) sitesi adından bulunur
   - `src/data/funds.ts`: TEFAS (yatırım fonu) ve BES (emeklilik yatırım fonu) listeleri **KAP**'tan; logolar kurucu şirketin sitesinden
   - `src/data/crypto.ts`: **CoinGecko**'dan ilk 500 coin (logolarıyla)
 - Fiyatlar:
-  - Hisse, döviz ve emtia: Yahoo Finance
+  - Hisse, ETF, döviz, emtia ve endeksler (XU100, ^SP500TR): Yahoo Finance
+  - Enflasyon (TÜİK TÜFE): OECD istatistik servisi (`sdmx.oecd.org`). TÜİK'in kendi veri servisi giriş istiyor.
   - Kripto: CoinGecko, coin kimliğiyle; aynı kısaltmalı coinler karışmaz
   - Fonlar (TEFAS/BES): **elle girilir.** Günlük fon fiyatları yalnız TEFAS'ta var ve TEFAS sitesi otomatik erişime karşı korunuyor. Lisanslı bir veri kaynağı bağlanınca otomatik olabilir.
 - ABD'de bilinen şirketlerin hepsinin internet adresi var. Wikidata'da kaydı olmayan küçük şirketlerde (yaklaşık 3.700) harf rozeti görünür.
@@ -99,6 +109,7 @@ python3 -I scripts/fetch-bist-sources.py /tmp/bist
 python3 -I scripts/build-bist-data.py /tmp/bist/stocks.json /tmp/bist/sites.json > src/data/bist.ts
 python3 -I scripts/fetch-us-sources.py /tmp/us
 python3 -I scripts/build-us-data.py /tmp/us/us-stocks.json /tmp/us/us-sites.json > src/data/us.ts
+python3 -I scripts/build-etf-data.py /tmp/us/us-etfs.json > src/data/etf.ts
 python3 -I scripts/fetch-fund-sources.py /tmp/fon       # pdftotext gerekir (poppler-utils)
 python3 -I scripts/build-fund-data.py /tmp/fon/funds.json > src/data/funds.ts
 python3 -I scripts/fetch-crypto-sources.py /tmp/kripto
@@ -140,4 +151,7 @@ Göndermeden önce `app.json` içindeki `ios.bundleIdentifier` değerini (şu an
   - Yayına çıkmadan önce lisanslı bir veri sağlayıcı düşünülmeli.
   - Sağlayıcı değişirse yalnızca `src/lib/prices.ts` değişir.
 - Geçmiş kurlar da Yahoo Finance'ten günlük kapanış olarak alınıyor. Gün içi kur farkı dikkate alınmıyor.
+- TEFAS/BES fon fiyatları elle giriliyor (yukarıda nedeni yazıyor).
+- Karşılaştırmada BIST 100 temettüler hariç. Temettüler dahil BIST 100 getiri endeksi için lisanslı veri gerekir.
+- OECD'deki Türkiye TÜFE serisi şu an Aralık 2025'te bitiyor. Güncel TÜFE için TCMB EVDS (ücretsiz, kayıt ve API anahtarı ister) bağlanabilir.
 - Veriler yalnızca telefonda duruyor. Uygulama silinirse veriler de silinir. Yedekleme ileride eklenebilir.
