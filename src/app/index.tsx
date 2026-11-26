@@ -1,6 +1,6 @@
 import * as Haptics from 'expo-haptics';
 import { Stack, router } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import {
   ActivityIndicator,
   Platform,
@@ -13,14 +13,16 @@ import {
   useWindowDimensions,
 } from 'react-native';
 
+import { AssetIcon, CategoryIcon } from '@/components/asset-icon';
 import { DonutChart } from '@/components/donut-chart';
 import { PrimaryButton } from '@/components/ui';
 import { pnlColor, useColors } from '@/constants/theme';
 import { usePortfolio } from '@/context/portfolio-context';
 import { displaySymbol, kindInfo, quantityUnit } from '@/lib/assets';
 import { buildChartData, type ChartAsset, type ChartCategory, type DonutHit } from '@/lib/donut';
-import { formatMoney, formatPct, formatPrice, formatQuantity, formatTime } from '@/lib/format';
-import type { AssetKind, Holding } from '@/lib/types';
+import { currencySymbol, formatMoney, formatPct, formatPrice, formatQuantity, formatTime } from '@/lib/format';
+import { DISPLAY_CURRENCIES } from '@/lib/portfolio';
+import type { AssetKind, DisplayCurrency, Holding } from '@/lib/types';
 
 function tick() {
   if (Platform.OS !== 'web') Haptics.selectionAsync().catch(() => {});
@@ -29,10 +31,13 @@ function tick() {
 export default function PortfolioScreen() {
   const c = useColors();
   const { width } = useWindowDimensions();
-  const { ready, holdings, summary, refreshing, refresh, lastUpdated, error } = usePortfolio();
+  const { ready, holdings, summary, refreshing, refresh, lastUpdated, error, displayCurrency, cycleDisplayCurrency } =
+    usePortfolio();
   const [openKind, setOpenKind] = useState<AssetKind>();
   const [selectedAsset, setSelectedAsset] = useState<string>();
 
+  const cur = displayCurrency;
+  const totals = summary.totals[cur];
   const categories = useMemo(() => buildChartData(holdings, summary), [holdings, summary]);
   // Açık tür portföyden kalktıysa (ör. hepsi satıldıysa) kapalı say.
   const openCat = categories.find((x) => x.kind === openKind);
@@ -64,13 +69,47 @@ export default function PortfolioScreen() {
       }
       return;
     }
-    // Ortaya dokunmak bir seviye geri gider, dışarıya dokunmak her şeyi kapatır.
-    if (hit.type === 'center' && selected) {
+    // Ortaya dokununca para birimi değişir (TL → $ → € → TL); dışarıya dokununca her şey kapanır.
+    if (hit.type === 'center') {
       tick();
-      setSelectedAsset(undefined);
+      cycleDisplayCurrency();
       return;
     }
     closeAll();
+  }
+
+  let center: { icon?: ReactNode; title: string; value?: number; sub: string; subColor: string };
+  if (selected) {
+    center = {
+      icon: (
+        <AssetIcon
+          kind={selected.kind}
+          symbol={selected.holding.symbol}
+          label={selected.label}
+          color={selected.color}
+          size={20}
+        />
+      ),
+      title: selected.label,
+      value: selected.holding.views[cur]?.value,
+      sub: `Portföyün ${formatPct(selected.pct, { signed: false })}'i`,
+      subColor: c.textSecondary,
+    };
+  } else if (openCat) {
+    center = {
+      icon: <CategoryIcon kind={openCat.kind} size={20} />,
+      title: openCat.label,
+      value: openCat.totals[cur]?.value,
+      sub: `Portföyün ${formatPct(openCat.pct, { signed: false })}'i`,
+      subColor: c.textSecondary,
+    };
+  } else {
+    center = {
+      title: 'Toplam Değer',
+      value: totals.value,
+      sub: formatPct(totals.pnlPct),
+      subColor: pnlColor(c, totals.pnl),
+    };
   }
 
   return (
@@ -100,10 +139,10 @@ export default function PortfolioScreen() {
           <EmptyState />
         ) : (
           <>
-            {(error || summary.incomplete) && (
+            {(error || totals.incomplete) && (
               <View style={[styles.banner, { backgroundColor: c.warningBg }]}>
                 <Text style={[styles.bannerText, { color: c.warning }]}>
-                  {error ?? 'Dolar kuru alınamadığı için bazı varlıklar toplama dahil edilmedi.'}
+                  {error ?? 'Kur alınamadığı için bazı varlıklar toplama dahil edilmedi.'}
                 </Text>
               </View>
             )}
@@ -116,38 +155,49 @@ export default function PortfolioScreen() {
                   selectedAsset={selected?.key}
                   size={chartSize}
                   onTap={onChartTap}>
-                  <CenterLabel
-                    title={selected ? selected.label : openCat ? openCat.label : 'Toplam Değer'}
-                    value={selected ? selected.valueTry : openCat ? openCat.valueTry : summary.valueTry}
-                    sub={
-                      selected
-                        ? `Portföyün ${formatPct(selected.pct, { signed: false })}'i`
-                        : openCat
-                          ? `Portföyün ${formatPct(openCat.pct, { signed: false })}'i`
-                          : formatPct(summary.pnlPct)
-                    }
-                    subColor={selected || openCat ? c.textSecondary : pnlColor(c, summary.pnlTry)}
-                  />
+                  <View style={styles.centerTitleRow}>
+                    {center.icon}
+                    <Text style={[styles.centerTitle, { color: c.textSecondary }]} numberOfLines={1}>
+                      {center.title}
+                    </Text>
+                  </View>
+                  <Text style={[styles.centerValue, { color: c.text }]} numberOfLines={1} adjustsFontSizeToFit>
+                    {center.value != null ? formatMoney(center.value, cur, { decimals: 0 }) : '—'}
+                  </Text>
+                  <Text style={[styles.centerSub, { color: center.subColor }]} numberOfLines={1}>
+                    {center.sub}
+                  </Text>
+                  <CurrencySwitch active={cur} />
                 </DonutChart>
-                <Text style={[styles.hint, { color: c.textSecondary }]}>
-                  {activeKind ? 'Geri dönmek için ortaya dokun' : 'Ayrıntı için bir dilime dokun'}
-                </Text>
+                {activeKind ? (
+                  <Pressable
+                    onPress={closeAll}
+                    hitSlop={8}
+                    accessibilityRole="button"
+                    style={({ pressed }) => [styles.backPill, { backgroundColor: c.chip, opacity: pressed ? 0.7 : 1 }]}>
+                    <Text style={[styles.backPillText, { color: c.tint }]}>‹ Tüm portföy</Text>
+                  </Pressable>
+                ) : (
+                  <Text style={[styles.hint, { color: c.textSecondary }]}>
+                    Ayrıntı için dilime, döviz için ortaya dokun
+                  </Text>
+                )}
               </View>
             )}
 
             <View style={styles.stats}>
               <Stat
                 label="Toplam K/Z"
-                value={formatMoney(summary.pnlTry, 'TRY', { signed: true })}
-                sub={formatPct(summary.pnlPct)}
-                color={pnlColor(c, summary.pnlTry)}
+                value={formatMoney(totals.pnl, cur, { signed: true })}
+                sub={formatPct(totals.pnlPct)}
+                color={pnlColor(c, totals.pnl)}
               />
               <View style={[styles.statDivider, { backgroundColor: c.border }]} />
               <Stat
                 label="Bugün"
-                value={formatMoney(summary.dayChangeTry, 'TRY', { signed: true })}
-                sub={formatPct(summary.dayChangePct)}
-                color={pnlColor(c, summary.dayChangeTry)}
+                value={formatMoney(totals.dayChange, cur, { signed: true })}
+                sub={formatPct(totals.dayChangePct)}
+                color={pnlColor(c, totals.dayChange)}
               />
             </View>
 
@@ -168,6 +218,7 @@ export default function PortfolioScreen() {
                     <AssetRow
                       key={a.key}
                       asset={a}
+                      currency={cur}
                       highlighted={a.key === selected?.key}
                       last={i === openCat.assets.length - 1}
                     />
@@ -176,6 +227,7 @@ export default function PortfolioScreen() {
                     <CategoryRow
                       key={cat.kind}
                       category={cat}
+                      currency={cur}
                       last={i === categories.length - 1}
                       onPress={() => openCategory(cat.kind)}
                     />
@@ -188,7 +240,7 @@ export default function PortfolioScreen() {
                   <Text style={[styles.listTitle, { color: c.text }]}>Satılanlar</Text>
                 </View>
                 {closed.map((h, i) => (
-                  <ClosedRow key={h.key} holding={h} last={i === closed.length - 1} />
+                  <ClosedRow key={h.key} holding={h} currency={cur} last={i === closed.length - 1} />
                 ))}
               </>
             )}
@@ -199,6 +251,7 @@ export default function PortfolioScreen() {
                 : lastUpdated
                   ? `Son güncelleme ${formatTime(lastUpdated)}`
                   : 'Fiyat bekleniyor'}
+              {cur !== 'TRY' ? '\nDöviz bazında kâr/zarar, alış günlerindeki kurla hesaplanır.' : ''}
               {'\n'}Fiyatlar gecikmeli olabilir. Bu uygulama yatırım tavsiyesi vermez.
             </Text>
           </>
@@ -208,20 +261,19 @@ export default function PortfolioScreen() {
   );
 }
 
-function CenterLabel({ title, value, sub, subColor }: { title: string; value: number; sub: string; subColor: string }) {
+/** Halkanın ortasındaki "₺ $ €" göstergesi; seçili olan vurgulanır. */
+function CurrencySwitch({ active }: { active: DisplayCurrency }) {
   const c = useColors();
   return (
-    <>
-      <Text style={[styles.centerTitle, { color: c.textSecondary }]} numberOfLines={1}>
-        {title}
-      </Text>
-      <Text style={[styles.centerValue, { color: c.text }]} numberOfLines={1} adjustsFontSizeToFit>
-        {formatMoney(value, 'TRY', { decimals: 0 })}
-      </Text>
-      <Text style={[styles.centerSub, { color: subColor }]} numberOfLines={1}>
-        {sub}
-      </Text>
-    </>
+    <View style={styles.switchRow}>
+      {DISPLAY_CURRENCIES.map((k) => (
+        <View key={k} style={[styles.switchItem, k === active && { backgroundColor: c.tint }]}>
+          <Text style={[styles.switchText, { color: k === active ? c.tintText : c.textSecondary }]}>
+            {currencySymbol(k)}
+          </Text>
+        </View>
+      ))}
+    </View>
   );
 }
 
@@ -239,7 +291,7 @@ function Stat({ label, value, sub, color }: { label: string; value: string; sub:
 }
 
 function Row({
-  color,
+  icon,
   title,
   subtitle,
   pct,
@@ -250,7 +302,7 @@ function Row({
   highlighted,
   onPress,
 }: {
-  color: string;
+  icon: ReactNode;
   title: string;
   subtitle?: string;
   pct?: string;
@@ -268,7 +320,7 @@ function Row({
       accessibilityRole="button"
       style={({ pressed }) => [styles.row, (pressed || highlighted) && { backgroundColor: c.chip }]}>
       {!last && <View style={[styles.separator, { backgroundColor: c.border }]} />}
-      <View style={[styles.dot, { backgroundColor: color }]} />
+      {icon}
       <View style={styles.rowMain}>
         <Text style={[styles.rowTitle, { color: c.text }]} numberOfLines={1}>
           {title}
@@ -282,51 +334,67 @@ function Row({
       {pct ? <Text style={[styles.rowPct, { color: c.textSecondary }]}>{pct}</Text> : null}
       <View style={styles.rowRight}>
         <Text style={[styles.rowValue, { color: c.text }]}>{value}</Text>
-        <Text style={[styles.rowChange, { color: changeColor }]}>{change}</Text>
+        {change ? <Text style={[styles.rowChange, { color: changeColor }]}>{change}</Text> : null}
       </View>
     </Pressable>
   );
 }
 
+const ICON_SIZE = 38;
+
 function CategoryRow({
   category: cat,
+  currency,
   last,
   onPress,
 }: {
   category: ChartCategory;
+  currency: DisplayCurrency;
   last: boolean;
   onPress: () => void;
 }) {
   const c = useColors();
+  const t = cat.totals[currency];
   return (
     <Row
-      color={cat.color}
+      icon={<CategoryIcon kind={cat.kind} size={ICON_SIZE} />}
       title={kindInfo(cat.kind).label}
       subtitle={`${cat.assets.length} varlık`}
       pct={formatPct(cat.pct, { signed: false })}
-      value={formatMoney(cat.valueTry, 'TRY', { decimals: 0 })}
-      change={formatPct(cat.pnlPct)}
-      changeColor={pnlColor(c, cat.pnlTry)}
+      value={t ? formatMoney(t.value, currency, { decimals: 0 }) : '—'}
+      change={t ? formatPct(t.pnlPct) : ''}
+      changeColor={pnlColor(c, t?.pnl)}
       last={last}
       onPress={onPress}
     />
   );
 }
 
-function AssetRow({ asset: a, highlighted, last }: { asset: ChartAsset; highlighted: boolean; last: boolean }) {
+function AssetRow({
+  asset: a,
+  currency,
+  highlighted,
+  last,
+}: {
+  asset: ChartAsset;
+  currency: DisplayCurrency;
+  highlighted: boolean;
+  last: boolean;
+}) {
   const c = useColors();
   const h = a.holding;
+  const v = h.views[currency];
   return (
     <Row
-      color={a.color}
+      icon={<AssetIcon kind={h.kind} symbol={h.symbol} label={a.label} color={a.color} size={ICON_SIZE} ring />}
       title={a.label}
       subtitle={`${formatQuantity(h.quantity)} ${quantityUnit(h.kind, h.symbol)} · ${
         h.priceMissing ? 'fiyat yok' : formatPrice(h.price, h.currency)
       }`}
       pct={formatPct(a.pct, { signed: false })}
-      value={formatMoney(a.valueTry, 'TRY', { decimals: 0 })}
-      change={formatPct(h.unrealizedPct)}
-      changeColor={pnlColor(c, h.unrealizedPnl)}
+      value={v ? formatMoney(v.value, currency, { decimals: 0 }) : '—'}
+      change={v ? formatPct(v.pnlPct) : ''}
+      changeColor={pnlColor(c, v?.pnl)}
       last={last}
       highlighted={highlighted}
       onPress={() => router.push({ pathname: '/asset/[key]', params: { key: a.key } })}
@@ -334,14 +402,20 @@ function AssetRow({ asset: a, highlighted, last }: { asset: ChartAsset; highligh
   );
 }
 
-function ClosedRow({ holding: h, last }: { holding: Holding; last: boolean }) {
+function ClosedRow({ holding: h, currency, last }: { holding: Holding; currency: DisplayCurrency; last: boolean }) {
   const c = useColors();
+  const realized = h.views[currency]?.realized;
+  const label = displaySymbol(h.kind, h.symbol);
   return (
     <Row
-      color={c.border}
-      title={displaySymbol(h.kind, h.symbol)}
+      icon={<AssetIcon kind={h.kind} symbol={h.symbol} label={label} color={c.textSecondary} size={ICON_SIZE} />}
+      title={label}
       subtitle={`${kindInfo(h.kind).label} · gerçekleşen`}
-      value={formatMoney(h.realizedPnl, h.currency, { signed: true })}
+      value={
+        realized != null
+          ? formatMoney(realized, currency, { signed: true })
+          : formatMoney(h.realizedPnl, h.currency, { signed: true })
+      }
       change=""
       changeColor={c.textSecondary}
       last={last}
@@ -401,10 +475,27 @@ const styles = StyleSheet.create({
   hint: {
     fontSize: 13,
     marginTop: 2,
+    textAlign: 'center',
+  },
+  backPill: {
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 999,
+  },
+  backPillText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  centerTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    maxWidth: '100%',
   },
   centerTitle: {
     fontSize: 14,
     fontWeight: '600',
+    flexShrink: 1,
   },
   centerValue: {
     fontSize: 26,
@@ -414,6 +505,22 @@ const styles = StyleSheet.create({
   },
   centerSub: {
     fontSize: 14,
+    fontWeight: '700',
+  },
+  switchRow: {
+    flexDirection: 'row',
+    gap: 4,
+    marginTop: 8,
+  },
+  switchItem: {
+    width: 24,
+    height: 20,
+    borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  switchText: {
+    fontSize: 12,
     fontWeight: '700',
   },
   stats: {
@@ -461,22 +568,17 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 12,
+    paddingVertical: 10,
     paddingHorizontal: 4,
     gap: 12,
     borderRadius: 8,
   },
   separator: {
     position: 'absolute',
-    left: 28,
+    left: 4 + ICON_SIZE + 12,
     right: 0,
     bottom: 0,
     height: StyleSheet.hairlineWidth,
-  },
-  dot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
   },
   rowMain: {
     flex: 1,

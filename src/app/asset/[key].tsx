@@ -2,6 +2,7 @@ import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { Alert, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
+import { AssetIcon } from '@/components/asset-icon';
 import { Card, PrimaryButton, SectionTitle, StatRow } from '@/components/ui';
 import { pnlColor, useColors } from '@/constants/theme';
 import { usePortfolio } from '@/context/portfolio-context';
@@ -16,8 +17,10 @@ import {
   parseDecimal,
   priceDecimals,
   toInputString,
+  trUpper,
 } from '@/lib/format';
-import type { Transaction } from '@/lib/types';
+import { DISPLAY_CURRENCIES } from '@/lib/portfolio';
+import type { DisplayCurrency, Holding, Transaction } from '@/lib/types';
 
 function confirm(title: string, message: string, onConfirm: () => void) {
   if (Platform.OS === 'web') {
@@ -50,7 +53,6 @@ export default function AssetScreen() {
 
   const info = kindInfo(h.kind);
   const title = displaySymbol(h.kind, h.symbol);
-  const usd = h.currency === 'USD';
 
   function savePrice() {
     const p = parseDecimal(priceInput);
@@ -73,12 +75,17 @@ export default function AssetScreen() {
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled">
         <Card>
-          <Text style={[styles.kind, { color: info.color }]}>{info.label}</Text>
-          {h.name !== h.symbol && h.name !== title && (
-            <Text style={[styles.name, { color: c.textSecondary }]} numberOfLines={2}>
-              {h.name}
-            </Text>
-          )}
+          <View style={styles.headRow}>
+            <AssetIcon kind={h.kind} symbol={h.symbol} label={title} color={info.color} size={44} />
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.kind, { color: info.color }]}>{trUpper(info.label)}</Text>
+              {h.name !== h.symbol && h.name !== title && (
+                <Text style={[styles.name, { color: c.textSecondary }]} numberOfLines={2}>
+                  {h.name}
+                </Text>
+              )}
+            </View>
+          </View>
           <Text style={[styles.price, { color: c.text }]}>
             {h.priceMissing ? 'Fiyat yok' : formatPrice(h.price, h.currency)}
           </Text>
@@ -133,7 +140,6 @@ export default function AssetScreen() {
                 value={`${formatMoney(h.unrealizedPnl, h.currency, { signed: true })} (${formatPct(h.unrealizedPct)})`}
                 valueColor={pnlColor(c, h.unrealizedPnl)}
               />
-              {usd && h.valueTry != null && <StatRow label="TL karşılığı" value={formatMoney(h.valueTry, 'TRY')} />}
             </>
           )}
           {Math.abs(h.realizedPnl) > 0.005 && (
@@ -144,6 +150,8 @@ export default function AssetScreen() {
             />
           )}
         </Card>
+
+        {h.quantity > 0 && <CurrencyBreakdown holding={h} />}
 
         <View style={styles.actions}>
           <View style={{ flex: 1 }}>
@@ -176,6 +184,51 @@ export default function AssetScreen() {
           ))}
         </Card>
       </ScrollView>
+    </>
+  );
+}
+
+const CURRENCY_NAMES: Record<DisplayCurrency, string> = {
+  TRY: 'TL bazında',
+  USD: 'Dolar bazında',
+  EUR: 'Euro bazında',
+};
+
+/** Varlığın TL, dolar ve euro bazında değeri ve kâr/zararı (alış günlerindeki kurla). */
+function CurrencyBreakdown({ holding: h }: { holding: Holding }) {
+  const c = useColors();
+  const rows = DISPLAY_CURRENCIES.filter((cur) => h.views[cur]);
+  if (rows.length === 0) return null;
+  return (
+    <>
+      <SectionTitle>Para birimine göre</SectionTitle>
+      <Card style={{ paddingVertical: 4 }}>
+        {rows.map((cur, i) => {
+          const v = h.views[cur]!;
+          return (
+            <View
+              key={cur}
+              style={[
+                styles.fxRow,
+                i < rows.length - 1 && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: c.border },
+              ]}>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.fxLabel, { color: c.text }]}>{CURRENCY_NAMES[cur]}</Text>
+                <Text style={[styles.fxSub, { color: c.textSecondary }]}>Değer {formatMoney(v.value, cur)}</Text>
+              </View>
+              <View style={{ alignItems: 'flex-end' }}>
+                <Text style={[styles.fxPnl, { color: pnlColor(c, v.pnl) }]}>
+                  {formatMoney(v.pnl, cur, { signed: true })}
+                </Text>
+                <Text style={[styles.fxSub, { color: pnlColor(c, v.pnl) }]}>{formatPct(v.pnlPct)}</Text>
+              </View>
+            </View>
+          );
+        })}
+      </Card>
+      <Text style={[styles.note, { color: c.textSecondary }]}>
+        Dolar ve euro bazında kâr/zarar, her alışın kendi tarihindeki kurla hesaplanır.
+      </Text>
     </>
   );
 }
@@ -218,10 +271,38 @@ const styles = StyleSheet.create({
     paddingBottom: 48,
     gap: 8,
   },
+  headRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  fxRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+  },
+  fxLabel: {
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  fxSub: {
+    fontSize: 13,
+    marginTop: 2,
+    fontVariant: ['tabular-nums'],
+  },
+  fxPnl: {
+    fontSize: 15,
+    fontWeight: '700',
+    fontVariant: ['tabular-nums'],
+  },
+  note: {
+    fontSize: 12,
+    marginTop: 6,
+    paddingHorizontal: 4,
+  },
   kind: {
     fontSize: 13,
     fontWeight: '700',
-    textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
   name: {

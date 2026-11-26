@@ -1,7 +1,32 @@
-import { assetKey, fixedName, kindInfo, METAL_SOURCE, quoteSymbolFor, TROY_OUNCE_GRAMS, USDTRY_SYMBOL } from './assets';
-import type { AllocationSlice, AssetKind, AssetQuote, Holding, PortfolioSummary, RawQuote, Transaction } from './types';
+import {
+  assetKey,
+  EURTRY_SYMBOL,
+  FX_RATE_SYMBOL,
+  fixedName,
+  kindInfo,
+  METAL_SOURCE,
+  quoteSymbolFor,
+  TROY_OUNCE_GRAMS,
+  USDTRY_SYMBOL,
+} from './assets';
+import type {
+  AllocationSlice,
+  AssetKind,
+  AssetQuote,
+  Currency,
+  DisplayCurrency,
+  FxHistory,
+  FxSeries,
+  Holding,
+  MoneyTotals,
+  MoneyView,
+  PortfolioSummary,
+  RawQuote,
+  Transaction,
+} from './types';
 
 const EPSILON = 1e-9;
+export const DISPLAY_CURRENCIES: DisplayCurrency[] = ['TRY', 'USD', 'EUR'];
 
 export function sortTransactions(transactions: Transaction[]): Transaction[] {
   return [...transactions].sort((a, b) => (a.date === b.date ? a.createdAt - b.createdAt : a.date < b.date ? -1 : 1));
@@ -39,9 +64,9 @@ export function computePosition(transactions: Transaction[]): Position {
   return { quantity, avgCost: quantity > 0 ? costBasis / quantity : 0, costBasis, realizedPnl };
 }
 
-/** Bir varlık için gereken ham sembollerin listesi (USD/TRY kuru her zaman eklenir). */
+/** Gereken ham sembollerin listesi (USD/TRY ve EUR/TRY kurları her zaman eklenir). */
 export function requiredQuoteSymbols(transactions: Transaction[]): string[] {
-  const set = new Set<string>([USDTRY_SYMBOL]);
+  const set = new Set<string>([USDTRY_SYMBOL, EURTRY_SYMBOL]);
   for (const t of transactions) {
     const s = quoteSymbolFor(t.kind, t.symbol);
     if (s) set.add(s);
@@ -77,10 +102,105 @@ export function resolveAssetQuote(
   return { price: q.price, previousClose: q.previousClose, name: q.name, fetchedAt: q.fetchedAt };
 }
 
+// ---------------------------------------------------------------------------
+// Kurlar
+
+/** Verilen tarihteki (yoksa ondan önceki son) kur. Seri o tarihten sonra başlıyorsa ilk kur. */
+export function rateOn(series: FxSeries | undefined, date: string): number | undefined {
+  if (!series || series.dates.length === 0) return undefined;
+  const { dates, rates } = series;
+  if (date <= dates[0]) return rates[0];
+  let lo = 0;
+  let hi = dates.length - 1;
+  while (lo < hi) {
+    const mid = (lo + hi + 1) >> 1;
+    if (dates[mid] <= date) lo = mid;
+    else hi = mid - 1;
+  }
+  return rates[lo];
+}
+
+/** Kur bilgisi: güncel, önceki kapanış ve geçmiş. Değerler 1 birim dövizin TL karşılığıdır. */
+export class FxRates {
+  constructor(
+    private raw: Record<string, RawQuote>,
+    private history: FxHistory = {},
+  ) {}
+
+  /** Güncel kur. TRY için 1. */
+  now(cur: DisplayCurrency | Currency): number | undefined {
+    if (cur === 'TRY') return 1;
+    return this.raw[FX_RATE_SYMBOL[cur]]?.price;
+  }
+
+  /** Önceki kapanış kuru; yoksa güncel kur. */
+  previous(cur: DisplayCurrency | Currency): number | undefined {
+    if (cur === 'TRY') return 1;
+    return this.raw[FX_RATE_SYMBOL[cur]]?.previousClose ?? this.now(cur);
+  }
+
+  /** Bir tarihteki kur. Geçmiş yoksa ya da tarih geçmişin son gününden yeniyse güncel kur. */
+  on(cur: DisplayCurrency | Currency, date: string): number | undefined {
+    if (cur === 'TRY') return 1;
+    const series = this.history[cur];
+    if (!series || series.dates.length === 0 || date > series.dates[series.dates.length - 1]) {
+      return this.now(cur) ?? rateOn(series, date);
+    }
+    return rateOn(series, date);
+  }
+}
+
+/** Bir tutarı `from` para biriminden `to` para birimine, verilen kurlarla çevirir. */
+function convert(amount: number, fromRate: number | undefined, toRate: number | undefined): number | undefined {
+  if (fromRate == null || toRate == null || toRate <= 0) return undefined;
+  return (amount * fromRate) / toRate;
+}
+
+// ---------------------------------------------------------------------------
+// Varlıklar
+
+interface CurrencyLedger {
+  cost: number;
+  realized: number;
+  ok: boolean;
+}
+
+/** Ortalama maliyetle, her para biriminde ayrı maliyet ve gerçekleşen K/Z (işlem tarihindeki kurla). */
+function ledgerIn(sorted: Transaction[], native: Currency, target: DisplayCurrency, fx: FxRates): CurrencyLedger {
+  let quantity = 0;
+  let cost = 0;
+  let realized = 0;
+  let ok = true;
+  for (const t of sorted) {
+    const unit = native === target ? t.price : convert(t.price, fx.on(native, t.date), fx.on(target, t.date));
+    if (unit == null) {
+      ok = false;
+      continue;
+    }
+    if (t.side === 'buy') {
+      quantity += t.quantity;
+      cost += t.quantity * unit;
+    } else {
+      const sellQty = Math.min(t.quantity, quantity);
+      if (sellQty <= 0) continue;
+      const removed = cost * (sellQty / quantity);
+      realized += sellQty * unit - removed;
+      cost -= removed;
+      quantity -= sellQty;
+      if (quantity < EPSILON) {
+        quantity = 0;
+        cost = 0;
+      }
+    }
+  }
+  return { cost, realized, ok };
+}
+
 export function computeHoldings(
   transactions: Transaction[],
   raw: Record<string, RawQuote>,
   manualPrices: Record<string, number>,
+  history: FxHistory = {},
 ): Holding[] {
   const groups = new Map<string, Transaction[]>();
   for (const t of transactions) {
@@ -90,53 +210,74 @@ export function computeHoldings(
     else groups.set(key, [t]);
   }
 
-  const usdTry = raw[USDTRY_SYMBOL];
+  const fx = new FxRates(raw, history);
   const holdings: Holding[] = [];
 
   for (const [key, list] of groups) {
     const { kind, symbol } = list[0];
-    const info = kindInfo(kind);
-    const pos = computePosition(list);
+    const native = kindInfo(kind).currency;
+    const sorted = sortTransactions(list);
+    const pos = computePosition(sorted);
     const quote = resolveAssetQuote(kind, symbol, raw, manualPrices);
     const priceMissing = !quote;
     const price = quote?.price ?? pos.avgCost;
     const marketValue = pos.quantity * price;
     const unrealizedPnl = marketValue - pos.costBasis;
     const unrealizedPct = pos.costBasis > 0 ? (unrealizedPnl / pos.costBasis) * 100 : 0;
+    const prev = quote?.previousClose != null && quote.previousClose > 0 ? quote.previousClose : undefined;
 
     let dayChange: number | undefined;
     let dayChangePct: number | undefined;
-    if (quote?.previousClose != null && quote.previousClose > 0) {
-      dayChange = pos.quantity * (quote.price - quote.previousClose);
-      dayChangePct = ((quote.price - quote.previousClose) / quote.previousClose) * 100;
+    if (quote && prev != null) {
+      dayChange = pos.quantity * (quote.price - prev);
+      dayChangePct = ((quote.price - prev) / prev) * 100;
     }
 
-    const rate = info.currency === 'TRY' ? 1 : usdTry?.price;
-    const toTry = (v: number | undefined) => (v == null || rate == null ? undefined : v * rate);
+    const views: Holding['views'] = {};
+    for (const cur of DISPLAY_CURRENCIES) {
+      const ledger = ledgerIn(sorted, native, cur, fx);
+      const nowRate = fx.now(native);
+      const curNow = fx.now(cur);
+      if (!ledger.ok || nowRate == null || curNow == null) continue;
+      // Fiyat yoksa değer = maliyet (K/Z sıfır görünür).
+      const value = priceMissing ? ledger.cost : convert(marketValue, nowRate, curNow)!;
+      let viewDayChange: number | undefined;
+      if (!priceMissing && prev != null) {
+        const prevValue = convert(pos.quantity * prev, fx.previous(native), fx.previous(cur));
+        if (prevValue != null) viewDayChange = value - prevValue;
+      }
+      const pnl = value - ledger.cost;
+      views[cur] = {
+        value,
+        cost: ledger.cost,
+        pnl,
+        pnlPct: ledger.cost > 0 ? (pnl / ledger.cost) * 100 : 0,
+        realized: ledger.realized,
+        dayChange: viewDayChange,
+      } satisfies MoneyView;
+    }
 
     holdings.push({
       key,
       kind,
       symbol,
       name: fixedName(kind, symbol) ?? quote?.name ?? symbol,
-      currency: info.currency,
-      transactions: sortTransactions(list),
+      currency: native,
+      transactions: sorted,
       quantity: pos.quantity,
       avgCost: pos.avgCost,
       costBasis: pos.costBasis,
       realizedPnl: pos.realizedPnl,
       priceMissing,
       price,
-      previousClose: quote?.previousClose,
+      previousClose: prev,
       marketValue,
       unrealizedPnl,
       unrealizedPct,
       dayChange,
       dayChangePct,
-      valueTry: toTry(marketValue),
-      costTry: toTry(pos.costBasis),
-      pnlTry: toTry(unrealizedPnl),
-      dayChangeTry: toTry(dayChange),
+      views,
+      valueTry: views.TRY?.value,
     });
   }
 
@@ -149,48 +290,65 @@ export function computeHoldings(
   });
 }
 
+function emptyTotals(): MoneyTotals {
+  return { value: 0, cost: 0, pnl: 0, pnlPct: 0, dayChange: 0, dayChangePct: 0, incomplete: false };
+}
+
+function addTo(t: MoneyTotals, v: MoneyView) {
+  t.value += v.value;
+  t.cost += v.cost;
+  t.dayChange += v.dayChange ?? 0;
+}
+
+function finish(t: MoneyTotals): MoneyTotals {
+  t.pnl = t.value - t.cost;
+  t.pnlPct = t.cost > 0 ? (t.pnl / t.cost) * 100 : 0;
+  const prevValue = t.value - t.dayChange;
+  t.dayChangePct = prevValue > 0 ? (t.dayChange / prevValue) * 100 : 0;
+  return t;
+}
+
 export function computeSummary(holdings: Holding[]): PortfolioSummary {
-  let valueTry = 0;
-  let costTry = 0;
-  let dayChangeTry = 0;
-  let incomplete = false;
-  const byKind = new Map<AssetKind, { value: number; cost: number }>();
+  const totals = Object.fromEntries(DISPLAY_CURRENCIES.map((c) => [c, emptyTotals()])) as Record<
+    DisplayCurrency,
+    MoneyTotals
+  >;
+  const byKind = new Map<AssetKind, Record<DisplayCurrency, MoneyTotals>>();
 
   for (const h of holdings) {
     if (h.quantity <= 0) continue;
-    if (h.valueTry == null || h.costTry == null) {
-      incomplete = true;
-      continue;
+    let kindTotals = byKind.get(h.kind);
+    if (!kindTotals) {
+      kindTotals = Object.fromEntries(DISPLAY_CURRENCIES.map((c) => [c, emptyTotals()])) as Record<
+        DisplayCurrency,
+        MoneyTotals
+      >;
+      byKind.set(h.kind, kindTotals);
     }
-    valueTry += h.valueTry;
-    costTry += h.costTry;
-    dayChangeTry += h.dayChangeTry ?? 0;
-    const k = byKind.get(h.kind) ?? { value: 0, cost: 0 };
-    byKind.set(h.kind, { value: k.value + h.valueTry, cost: k.cost + h.costTry });
+    for (const cur of DISPLAY_CURRENCIES) {
+      const v = h.views[cur];
+      if (!v) {
+        totals[cur].incomplete = true;
+        kindTotals[cur].incomplete = true;
+        continue;
+      }
+      addTo(totals[cur], v);
+      addTo(kindTotals[cur], v);
+    }
   }
 
+  for (const cur of DISPLAY_CURRENCIES) finish(totals[cur]);
+  const totalTry = totals.TRY.value;
+
   const allocation: AllocationSlice[] = [...byKind.entries()]
-    .map(([kind, { value, cost }]) => ({
-      kind,
-      valueTry: value,
-      pct: valueTry > 0 ? (value / valueTry) * 100 : 0,
-      pnlTry: value - cost,
-      pnlPct: cost > 0 ? ((value - cost) / cost) * 100 : 0,
-    }))
+    .map(([kind, t]) => {
+      for (const cur of DISPLAY_CURRENCIES) finish(t[cur]);
+      return { kind, valueTry: t.TRY.value, pct: totalTry > 0 ? (t.TRY.value / totalTry) * 100 : 0, totals: t };
+    })
+    .filter((s) => s.valueTry > 0)
     .sort((a, b) => b.valueTry - a.valueTry);
 
-  const pnlTry = valueTry - costTry;
-  const prevValue = valueTry - dayChangeTry;
-  return {
-    valueTry,
-    costTry,
-    pnlTry,
-    pnlPct: costTry > 0 ? (pnlTry / costTry) * 100 : 0,
-    dayChangeTry,
-    dayChangePct: prevValue > 0 ? (dayChangeTry / prevValue) * 100 : 0,
-    incomplete,
-    allocation,
-  };
+  return { totals, allocation };
 }
 
 /** Bir varlıkta şu an eldeki miktar (satış doğrulaması için). */

@@ -2,6 +2,10 @@ import type { AssetKind, Currency } from './types';
 
 export const TROY_OUNCE_GRAMS = 31.1034768;
 export const USDTRY_SYMBOL = 'USDTRY=X';
+export const EURTRY_SYMBOL = 'EURTRY=X';
+
+/** Para biriminin TL kuru sembolü. */
+export const FX_RATE_SYMBOL = { USD: USDTRY_SYMBOL, EUR: EURTRY_SYMBOL } as const;
 
 export interface AssetKindInfo {
   kind: AssetKind;
@@ -80,6 +84,12 @@ export const SLICE_PALETTE = [
   '#22C55E',
   '#EAB308',
 ];
+
+/** Simgesiyle uyumlu olsun diye sabit renk verilen varlıklar. */
+export const FIXED_ASSET_COLORS: Record<string, string> = {
+  'metal:GRAM_ALTIN': '#EAB308',
+  'metal:GRAM_GUMUS': '#94A3B8',
+};
 
 const KIND_MAP = Object.fromEntries(ASSET_KINDS.map((k) => [k.kind, k])) as Record<AssetKind, AssetKindInfo>;
 

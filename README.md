@@ -7,7 +7,15 @@ Expo (React Native) ile yazıldı. Geliştirmek ve App Store'a göndermek için 
 
 - **Halka grafik:** Ana sayfanın ortasında portföy türlere göre (BIST, ABD, Emtia…) dilim dilim görünür.
   - Bir dilime dokununca o dilim yerinde içindeki varlıklara ayrılır, her biri farklı renkte. Diğer dilimler soluklaşır.
-  - Ayrılan bir varlığa dokununca ortada onun değeri yazar. Ortaya dokununca geri dönülür.
+  - Ayrılan bir varlığa dokununca ortada onun değeri yazar.
+  - "‹ Tüm portföy" düğmesiyle ya da halkanın dışına dokunarak geri dönülür.
+- **Para birimi:** Halkanın ortasına her dokunuşta TL → Dolar → Euro → TL arasında geçilir.
+  - Ana sayfadaki tüm tutarlar ve kâr/zarar seçilen para biriminde görünür. Seçim hatırlanır.
+  - Dolar ve euro bazında kâr/zarar, her alışın kendi tarihindeki kurla hesaplanır. Bu yüzden TL'de kârda olan bir varlık dolar bazında zararda görünebilir.
+- **Simgeler:** Yuvarlak bayrak ve resimler.
+  - BIST için Türk bayrağı, ABD için ABD bayrağı, Emtia için altın külçe.
+  - Dövizlerde bayrak çifti (ör. USD/TRY), gümüş için gümüş külçe.
+  - Hisse ve kriptolarda dilim rengiyle harf rozeti.
 - **Portföy özeti:** Toplam değer (TL), toplam kâr/zarar, günlük değişim
 - **Varlık türleri:**
   - BIST hisse (THYAO, ASELS…)
@@ -32,12 +40,13 @@ src/
     asset/[key].tsx     Varlık detayı ve işlem geçmişi
   components/
     donut-chart.tsx     Dokunulabilir halka grafik
+    asset-icon.tsx      Bayraklar, külçeler ve harf rozetleri (SVG)
     ui.tsx              Ortak bileşenler (kart, buton…)
   context/              Uygulama durumu, kayıt ve fiyat yenileme
   lib/
-    portfolio.ts        Hesaplamalar (ortalama maliyet, K/Z, toplamlar)
+    portfolio.ts        Hesaplamalar (ortalama maliyet, K/Z, TL/USD/EUR toplamlar)
     donut.ts            Grafik dilimleri, renkler ve dokunma hesabı
-    prices.ts           Fiyat çekme (Yahoo Finance)
+    prices.ts           Fiyat ve geçmiş kur çekme (Yahoo Finance)
     format.ts           Türkçe sayı/tarih biçimleri
     assets.ts           Varlık türleri ve semboller
 tests/                  Birim testleri
@@ -76,5 +85,5 @@ Göndermeden önce `app.json` içindeki `ios.bundleIdentifier` değerini (şu an
 - Fiyatlar Yahoo Finance'in resmi olmayan uç noktasından geliyor. Gecikmeli olabilir.
   - Yayına çıkmadan önce lisanslı bir veri sağlayıcı düşünülmeli.
   - Sağlayıcı değişirse yalnızca `src/lib/prices.ts` değişir.
-- Dolar bazlı varlıkların TL kâr/zararı güncel kurla hesaplanıyor. Alış günündeki kur dikkate alınmıyor.
+- Geçmiş kurlar da Yahoo Finance'ten günlük kapanış olarak alınıyor. Gün içi kur farkı dikkate alınmıyor.
 - Veriler yalnızca telefonda duruyor. Uygulama silinirse veriler de silinir. Yedekleme ileride eklenebilir.

@@ -1,5 +1,5 @@
-import { displaySymbol, kindInfo, SLICE_PALETTE } from './assets';
-import type { AssetKind, Holding, PortfolioSummary } from './types';
+import { displaySymbol, FIXED_ASSET_COLORS, kindInfo, SLICE_PALETTE } from './assets';
+import type { AllocationSlice, AssetKind, Holding, PortfolioSummary } from './types';
 
 const TAU = Math.PI * 2;
 
@@ -21,8 +21,8 @@ export interface ChartCategory {
   label: string;
   valueTry: number;
   pct: number;
-  pnlTry: number;
-  pnlPct: number;
+  /** Para birimlerine göre değer ve kâr/zarar. */
+  totals: AllocationSlice['totals'];
   color: string;
   assets: ChartAsset[];
 }
@@ -33,30 +33,41 @@ export function paletteFor(kind: AssetKind): string[] {
   return [base, ...SLICE_PALETTE.filter((c) => c !== base)];
 }
 
+/** Sabit renkli varlıklar (altın, gümüş) dışındakilere paletten sırayla renk verir; tekrar etmez. */
+function assignColors(kind: AssetKind, keys: string[]): string[] {
+  const fixed = keys.map((k) => FIXED_ASSET_COLORS[k]);
+  const palette = paletteFor(kind).filter((c) => !fixed.includes(c));
+  let i = 0;
+  return fixed.map((f) => f ?? palette[i++ % palette.length]);
+}
+
 /** Grafik verisi: türler (portföydeki paya göre) ve her türün içindeki varlıklar (değere göre). */
 export function buildChartData(holdings: Holding[], summary: PortfolioSummary): ChartCategory[] {
+  const totalTry = summary.totals.TRY.value;
   return summary.allocation.map((slice) => {
-    const palette = paletteFor(slice.kind);
-    const assets = holdings
+    const list = holdings
       .filter((h) => h.kind === slice.kind && h.quantity > 0 && h.valueTry != null && h.valueTry > 0)
-      .sort((a, b) => b.valueTry! - a.valueTry!)
-      .map((h, i) => ({
-        key: h.key,
-        kind: h.kind,
-        label: displaySymbol(h.kind, h.symbol),
-        valueTry: h.valueTry!,
-        pct: summary.valueTry > 0 ? (h.valueTry! / summary.valueTry) * 100 : 0,
-        pctOfKind: slice.valueTry > 0 ? (h.valueTry! / slice.valueTry) * 100 : 0,
-        color: palette[i % palette.length],
-        holding: h,
-      }));
+      .sort((a, b) => b.valueTry! - a.valueTry!);
+    const colors = assignColors(
+      slice.kind,
+      list.map((h) => h.key),
+    );
+    const assets = list.map((h, i) => ({
+      key: h.key,
+      kind: h.kind,
+      label: displaySymbol(h.kind, h.symbol),
+      valueTry: h.valueTry!,
+      pct: totalTry > 0 ? (h.valueTry! / totalTry) * 100 : 0,
+      pctOfKind: slice.valueTry > 0 ? (h.valueTry! / slice.valueTry) * 100 : 0,
+      color: colors[i],
+      holding: h,
+    }));
     return {
       kind: slice.kind,
       label: kindInfo(slice.kind).shortLabel,
       valueTry: slice.valueTry,
       pct: slice.pct,
-      pnlTry: slice.pnlTry,
-      pnlPct: slice.pnlPct,
+      totals: slice.totals,
       color: kindInfo(slice.kind).color,
       assets,
     };

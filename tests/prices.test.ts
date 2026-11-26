@@ -1,7 +1,14 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { fetchQuote, fetchQuotes, parseYahooChart } from '../src/lib/prices';
+import {
+  fetchHistory,
+  fetchQuote,
+  fetchQuotes,
+  historyRange,
+  parseYahooChart,
+  parseYahooHistory,
+} from '../src/lib/prices';
 
 function chart(meta: Record<string, unknown>) {
   return { chart: { result: [{ meta, timestamp: [], indicators: {} }], error: null } };
@@ -73,4 +80,48 @@ test('fetchQuotes başarısızları ayrı listeler', async () => {
   const r = await fetchQuotes(['GOOD', 'BAD'], fn);
   assert.deepEqual(Object.keys(r.quotes), ['GOOD']);
   assert.deepEqual(r.failed, ['BAD']);
+});
+
+test('kur geçmişi: yerel saate göre tarih, boş günler atlanır', () => {
+  // gmtoffset +3600: 23:00 UTC zaman damgası ertesi güne düşer.
+  const json = {
+    chart: {
+      result: [
+        {
+          meta: { gmtoffset: 3600 },
+          timestamp: [1735772400, 1735858800, 1735945200],
+          indicators: { quote: [{ close: [35.4, null, 35.6] }] },
+        },
+      ],
+    },
+  };
+  const s = parseYahooHistory(json, 7);
+  assert.deepEqual(s, { dates: ['2025-01-02', '2025-01-04'], rates: [35.4, 35.6], fetchedAt: 7 });
+  assert.equal(parseYahooHistory({ chart: { result: [{}] } }), null);
+});
+
+test('geçmiş aralığı en eski işlemi kapsar', () => {
+  const now = new Date('2026-11-26');
+  assert.equal(historyRange('2026-06-01', now), '1y');
+  assert.equal(historyRange('2025-03-01', now), '2y');
+  assert.equal(historyRange('2023-01-01', now), '5y');
+  assert.equal(historyRange('2018-01-01', now), '10y');
+  assert.equal(historyRange('2010-01-01', now), 'max');
+});
+
+test('fetchHistory doğru adresi çağırır', async () => {
+  const calls: string[] = [];
+  const fn = async (url: string) => {
+    calls.push(url);
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({
+        chart: { result: [{ timestamp: [1735776000], indicators: { quote: [{ close: [35] }] } }] },
+      }),
+    };
+  };
+  const s = await fetchHistory('USDTRY=X', '5y', fn);
+  assert.deepEqual(s.rates, [35]);
+  assert.match(calls[0], /chart\/USDTRY%3DX\?range=5y&interval=1d$/);
 });

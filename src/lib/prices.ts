@@ -1,4 +1,4 @@
-import type { RawQuote } from './types';
+import type { FxSeries, RawQuote } from './types';
 
 /**
  * Fiyatlar Yahoo Finance'in herkese açık grafik uç noktasından alınır (anahtar gerektirmez).
@@ -81,4 +81,62 @@ export async function fetchQuotes(
     else failed.push(symbols[i]);
   });
   return { quotes, failed };
+}
+
+/**
+ * Yahoo günlük grafik yanıtından kur geçmişini çıkarır. Tarihler borsanın yerel saatine göre
+ * (gmtoffset) hesaplanır; boş günler atlanır.
+ */
+export function parseYahooHistory(json: unknown, now: number = Date.now()): FxSeries | null {
+  const result = (json as { chart?: { result?: unknown[] } })?.chart?.result?.[0] as
+    | {
+        meta?: { gmtoffset?: number };
+        timestamp?: unknown[];
+        indicators?: { quote?: { close?: unknown[] }[] };
+      }
+    | undefined;
+  const ts = result?.timestamp;
+  const closes = result?.indicators?.quote?.[0]?.close;
+  if (!Array.isArray(ts) || !Array.isArray(closes)) return null;
+  const offset = typeof result?.meta?.gmtoffset === 'number' ? result.meta.gmtoffset : 0;
+  const byDate = new Map<string, number>();
+  ts.forEach((t, i) => {
+    const c = closes[i];
+    if (typeof t !== 'number' || typeof c !== 'number' || !Number.isFinite(c) || c <= 0) return;
+    byDate.set(new Date((t + offset) * 1000).toISOString().slice(0, 10), c);
+  });
+  if (byDate.size === 0) return null;
+  const dates = [...byDate.keys()].sort();
+  return { dates, rates: dates.map((d) => byDate.get(d)!), fetchedAt: now };
+}
+
+/** En eski işlem tarihini kapsayan en kısa Yahoo aralığı. */
+export function historyRange(earliestDate: string, now: Date = new Date()): string {
+  const years = (now.getTime() - new Date(earliestDate).getTime()) / (365.25 * 24 * 3600 * 1000);
+  if (years <= 0.95) return '1y';
+  if (years <= 1.95) return '2y';
+  if (years <= 4.95) return '5y';
+  if (years <= 9.95) return '10y';
+  return 'max';
+}
+
+export async function fetchHistory(
+  symbol: string,
+  range: string,
+  fetchFn: FetchLike = fetch as unknown as FetchLike,
+): Promise<FxSeries> {
+  const path = `/v8/finance/chart/${encodeURIComponent(symbol)}?range=${range}&interval=1d`;
+  let lastError: unknown;
+  for (const host of HOSTS) {
+    try {
+      const res = await fetchWithTimeout(fetchFn, host + path);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const series = parseYahooHistory(await res.json());
+      if (!series) throw new Error(`Geçmiş bulunamadı: ${symbol}`);
+      return series;
+    } catch (e) {
+      lastError = e;
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error(String(lastError));
 }

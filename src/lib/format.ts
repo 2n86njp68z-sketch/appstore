@@ -1,4 +1,4 @@
-import type { Currency } from './types';
+import type { DisplayCurrency } from './types';
 
 /** Türkçe sayı biçimi: binlik ayırıcı ".", ondalık ",". */
 export function formatNumber(value: number, minFraction = 0, maxFraction = 2): string {
@@ -11,9 +11,9 @@ export function formatNumber(value: number, minFraction = 0, maxFraction = 2): s
   return (value < 0 && !isZero ? '-' : '') + intPart + (frac ? ',' + frac : '');
 }
 
-const SYMBOLS: Record<Currency, string> = { TRY: '₺', USD: '$' };
+const SYMBOLS: Record<DisplayCurrency, string> = { TRY: '₺', USD: '$', EUR: '€' };
 
-export function currencySymbol(currency: Currency): string {
+export function currencySymbol(currency: DisplayCurrency): string {
   return SYMBOLS[currency];
 }
 
@@ -27,7 +27,7 @@ export function priceDecimals(value: number): number {
 
 export function formatMoney(
   value: number,
-  currency: Currency,
+  currency: DisplayCurrency,
   opts: { signed?: boolean; decimals?: number } = {},
 ): string {
   if (!Number.isFinite(value)) return '—';
@@ -38,7 +38,7 @@ export function formatMoney(
   return `${sign}${SYMBOLS[currency]}${body}`;
 }
 
-export function formatPrice(value: number, currency: Currency): string {
+export function formatPrice(value: number, currency: DisplayCurrency): string {
   const d = priceDecimals(value);
   if (!Number.isFinite(value)) return '—';
   return `${SYMBOLS[currency]}${formatNumber(value, 2, d)}`;
@@ -116,4 +116,9 @@ export function formatTrDate(iso: string): string {
 export function formatTime(ms: number): string {
   const d = new Date(ms);
   return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+/** Türkçe büyük harf: "i" → "İ", "ı" → "I" (yazı tipinin büyük harf dönüşümüne güvenmeden). */
+export function trUpper(text: string): string {
+  return text.replace(/i/g, 'İ').replace(/ı/g, 'I').toUpperCase();
 }

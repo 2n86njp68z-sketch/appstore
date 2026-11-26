@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 
 import { useColors } from '@/constants/theme';
+import { trUpper } from '@/lib/format';
 
 export function Card({ children, style }: { children: ReactNode; style?: StyleProp<ViewStyle> }) {
   const c = useColors();
@@ -12,7 +13,9 @@ export function SectionTitle({ children, right }: { children: ReactNode; right?:
   const c = useColors();
   return (
     <View style={styles.sectionRow}>
-      <Text style={[styles.sectionTitle, { color: c.textSecondary }]}>{children}</Text>
+      <Text style={[styles.sectionTitle, { color: c.textSecondary }]}>
+        {typeof children === 'string' ? trUpper(children) : children}
+      </Text>
       {right}
     </View>
   );
@@ -118,7 +121,6 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 13,
     fontWeight: '600',
-    textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
   chip: {

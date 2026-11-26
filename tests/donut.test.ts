@@ -16,6 +16,7 @@ function buy(kind: Transaction['kind'], symbol: string, quantity: number, price:
 
 const raw: Record<string, RawQuote> = {
   'USDTRY=X': { price: 40, fetchedAt: 1 },
+  'EURTRY=X': { price: 50, fetchedAt: 1 },
   'THYAO.IS': { price: 100, fetchedAt: 1 },
   'ASELS.IS': { price: 50, fetchedAt: 1 },
   'SISE.IS': { price: 10, fetchedAt: 1 },
@@ -58,8 +59,9 @@ test('türler portföy payına, varlıklar değere göre sıralanır', () => {
 
 test('tür kâr/zararı', () => {
   // BIST maliyet: 1200 + 2400 + 600 = 4200, değer 5000
-  close(cats[0].pnlTry, 800);
-  close(cats[0].pnlPct, (800 / 4200) * 100);
+  close(cats[0].totals.TRY!.pnl, 800);
+  close(cats[0].totals.TRY!.pnlPct, (800 / 4200) * 100);
+  close(cats[0].totals.USD!.value, 5000 / 40);
 });
 
 test('her varlık farklı renk alır, ilk renk türün rengi', () => {
@@ -151,4 +153,16 @@ test('tek türlü portföy tam halka olur', () => {
   const slices = layoutSlices(c);
   assert.equal(slices.length, 1);
   close(slices[0].end - slices[0].start, TAU);
+});
+
+test('altın ve gümüş sabit renk alır, diğer renklerle çakışmaz', () => {
+  const metals = computeHoldings(
+    [buy('metal', 'GRAM_GUMUS', 100, 30), buy('metal', 'GRAM_ALTIN', 1, 30)],
+    { ...raw, 'SI=F': { price: 31.1034768, fetchedAt: 1 } },
+    {},
+  );
+  const c = buildChartData(metals, computeSummary(metals));
+  const byLabel = Object.fromEntries(c[0].assets.map((a) => [a.label, a.color]));
+  assert.equal(byLabel['Gram Altın'], '#EAB308');
+  assert.equal(byLabel['Gram Gümüş'], '#94A3B8');
 });

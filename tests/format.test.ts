@@ -11,6 +11,7 @@ import {
   parseTrDate,
   formatTrDate,
   toInputString,
+  trUpper,
 } from '../src/lib/format';
 
 test('formatNumber Türkçe ayırıcı kullanır', () => {
@@ -72,4 +73,10 @@ test('tarih çevirileri', () => {
   assert.equal(parseTrDate('31.02.2025'), null);
   assert.equal(parseTrDate('2025-02-01'), null);
   assert.equal(formatTrDate('2026-11-26'), '26.11.2026');
+});
+
+test('Türkçe büyük harf', () => {
+  assert.equal(trUpper('Para birimine göre'), 'PARA BİRİMİNE GÖRE');
+  assert.equal(trUpper('Pozisyon'), 'POZİSYON');
+  assert.equal(trUpper('ışık'), 'IŞIK');
 });
