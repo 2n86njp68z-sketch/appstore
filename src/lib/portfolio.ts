@@ -9,6 +9,7 @@ import {
   TROY_OUNCE_GRAMS,
   USDTRY_SYMBOL,
 } from './assets';
+import { bistInfo } from './bist';
 import type {
   AllocationSlice,
   AssetKind,
@@ -261,7 +262,7 @@ export function computeHoldings(
       key,
       kind,
       symbol,
-      name: fixedName(kind, symbol) ?? quote?.name ?? symbol,
+      name: fixedName(kind, symbol) ?? (kind === 'bist' ? bistInfo(symbol)?.name : undefined) ?? quote?.name ?? symbol,
       currency: native,
       transactions: sorted,
       quantity: pos.quantity,

@@ -1,9 +1,10 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
+import { AssetIcon } from '@/components/asset-icon';
 import { Card, Chip, PrimaryButton, Segmented } from '@/components/ui';
-import { Font, useColors } from '@/constants/theme';
+import { Font, Type, useColors } from '@/constants/theme';
 import { usePortfolio } from '@/context/portfolio-context';
 import {
   ASSET_KINDS,
@@ -24,6 +25,7 @@ import {
   todayIso,
   toInputString,
 } from '@/lib/format';
+import { bistInfo } from '@/lib/bist';
 import { heldQuantity, resolveAssetQuote } from '@/lib/portfolio';
 import { fetchQuotes } from '@/lib/prices';
 import type { AssetKind, TransactionSide } from '@/lib/types';
@@ -60,6 +62,13 @@ export default function AddTransactionScreen() {
   const total = qty > 0 && unitPrice > 0 ? qty * unitPrice : undefined;
 
   const inputStyle = [styles.input, { color: c.text, backgroundColor: c.background, borderColor: c.border }];
+
+  // Menüden bir hisse seçilerek gelindiyse güncel fiyatı kendiliğinden doldur.
+  useEffect(() => {
+    if (lockedAsset && kind !== 'other') fillCurrentPrice();
+    // Yalnız ilk açılışta.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function fillCurrentPrice() {
     setError(undefined);
@@ -102,6 +111,18 @@ export default function AddTransactionScreen() {
       keyboardShouldPersistTaps="handled"
       keyboardDismissMode="on-drag"
       automaticallyAdjustKeyboardInsets>
+      {lockedAsset && (
+        <View style={styles.assetHead}>
+          <AssetIcon kind={kind} symbol={symbol} label={symbol} color={info.color} size={48} />
+          <View style={{ flex: 1 }}>
+            <Text style={[Type.title, { color: c.text }]}>{symbol}</Text>
+            <Text style={[Type.subhead, { color: c.textSecondary }]} numberOfLines={1}>
+              {(kind === 'bist' ? bistInfo(symbol)?.name : undefined) ?? info.label}
+            </Text>
+          </View>
+        </View>
+      )}
+
       {!lockedAsset && (
         <View style={styles.chips}>
           {ASSET_KINDS.map((k) => (
@@ -124,7 +145,7 @@ export default function AddTransactionScreen() {
               ))}
             </View>
           </Field>
-        ) : (
+        ) : lockedAsset ? null : (
           <Field label={kind === 'other' ? 'Varlık adı / kodu' : 'Sembol'}>
             <TextInput
               value={symbolInput}
@@ -133,9 +154,13 @@ export default function AddTransactionScreen() {
               placeholderTextColor={c.textTertiary}
               autoCapitalize="characters"
               autoCorrect={false}
-              editable={!lockedAsset}
               style={inputStyle}
             />
+            {kind === 'bist' && symbol.length >= 3 && (
+              <Text style={[styles.hint, { color: bistInfo(symbol) ? c.textSecondary : c.textTertiary }]}>
+                {bistInfo(symbol)?.name ?? 'Bu kod listede yok; fiyatı alınabiliyorsa yine eklenir.'}
+              </Text>
+            )}
           </Field>
         )}
 
@@ -235,6 +260,12 @@ const styles = StyleSheet.create({
     padding: 16,
     gap: 16,
     paddingBottom: 48,
+  },
+  assetHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    paddingHorizontal: 4,
   },
   chips: {
     flexDirection: 'row',

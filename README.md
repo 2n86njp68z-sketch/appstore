@@ -17,6 +17,12 @@ Expo (React Native) ile yazıldı. Geliştirmek ve App Store'a göndermek için 
   - Türk Market için Türk bayrağı, ABD Market için ABD bayrağı, Emtia için altın külçe.
   - Dövizlerde bayrak çifti (ör. USD/TRY), gümüş için gümüş külçe.
   - Hisse ve kriptolarda dilim rengiyle harf rozeti.
+- **Piyasalar menüsü (sol üstteki ☰):**
+  - En üstte arama çubuğu var. Kod ya da şirket adı yazdıkça sonuçlar anında süzülür, Türkçe harf farkı önemli değildir.
+  - Bölümler: Türk Market, ABD Market, Emtia, Fon, ABD ETF. Şimdilik Türk Market hazır, diğerleri "yakında".
+  - Türk Market'e dokununca BIST'teki 629 hisse alt alta açılır. Her satırda logo, kod, şirket adı, fiyat ve günlük değişim yazar.
+  - Fiyatlar yalnız ekranda görünen hisseler için 20'li gruplar halinde çekilir.
+  - Hisseye dokununca güncel fiyatı dolu işlem ekleme ekranı açılır. Eklenen hisse portföyde de logosuyla görünür.
 - **Portföy özeti:** Toplam değer (TL), toplam kâr/zarar, günlük değişim
 - **Varlık türleri:**
   - Türk Market: Borsa İstanbul hisseleri (THYAO, ASELS…)
@@ -41,17 +47,40 @@ src/
     asset/[key].tsx     Varlık detayı ve işlem geçmişi
   constants/theme.ts    Renkler, yazı tipi ve yazı stilleri
   components/
+    market-drawer.tsx   Sol menü: arama, bölümler, Türk Market listesi
+    company-logo.tsx    Şirket logosu (sitesinden), yoksa harf rozeti
     donut-chart.tsx     Dokunulabilir halka grafik
     asset-icon.tsx      Bayraklar, külçeler ve harf rozetleri (SVG)
     ui.tsx              Ortak bileşenler (kart, buton…)
   context/              Uygulama durumu, kayıt ve fiyat yenileme
+  data/bist.ts          BIST hisseleri (üretilmiş dosya)
   lib/
+    bist.ts             Hisse arama ve logo adresleri
     portfolio.ts        Hesaplamalar (ortalama maliyet, K/Z, TL/USD/EUR toplamlar)
     donut.ts            Grafik dilimleri, renkler ve dokunma hesabı
     prices.ts           Fiyat ve geçmiş kur çekme (Yahoo Finance)
     format.ts           Türkçe sayı/tarih biçimleri
     assets.ts           Varlık türleri ve semboller
 tests/                  Birim testleri
+```
+
+## Hisse listesi ve logolar
+
+- `src/data/bist.ts` dosyası iki ücretsiz ve herkese açık kaynaktan üretilir:
+  - **İş Yatırım:** hisse kodu, şirket adı, sektör
+  - **KAP:** şirketlerin internet adresi
+- Logolar uygulama çalışırken şirketin kendi sitesinden alınır. Sıra şöyle:
+  1. Sitenin büyük simgesi (`apple-touch-icon`)
+  2. Google'ın simge servisindeki büyük kopyası
+  3. `favicon.ico`
+- Hiçbiri yoksa ya da simge 32 pikselden küçükse harf rozeti görünür.
+- Logolar şirketlerin ticari markalarıdır. App Store'a çıkmadan önce lisanslı bir logo/veri kaynağı düşünülmeli.
+
+Listeyi güncellemek için (internet erişimi gerekir):
+
+```bash
+python3 -I scripts/fetch-bist-sources.py /tmp/bist
+python3 -I scripts/build-bist-data.py /tmp/bist/stocks.json /tmp/bist/sites.json > src/data/bist.ts
 ```
 
 ## Komutlar

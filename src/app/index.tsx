@@ -15,6 +15,7 @@ import {
 
 import { AssetIcon, CategoryIcon } from '@/components/asset-icon';
 import { DonutChart } from '@/components/donut-chart';
+import { DrawerButton } from '@/components/market-drawer';
 import { PrimaryButton } from '@/components/ui';
 import { pnlColor, pnlSoft, Radius, Type, useColors } from '@/constants/theme';
 import { usePortfolio } from '@/context/portfolio-context';
@@ -114,6 +115,7 @@ export default function PortfolioScreen() {
     <>
       <Stack.Screen
         options={{
+          headerLeft: () => <DrawerButton />,
           headerRight: () => (
             <Pressable
               onPress={() => router.push('/add')}

@@ -140,3 +140,92 @@ export async function fetchHistory(
   }
   throw lastError instanceof Error ? lastError : new Error(String(lastError));
 }
+
+// ---------------------------------------------------------------------------
+// Toplu fiyat (piyasa listesi için)
+
+const SPARK_CHUNK = 20;
+
+function lastNumber(values: unknown): number | undefined {
+  if (!Array.isArray(values)) return undefined;
+  for (let i = values.length - 1; i >= 0; i--) {
+    const v = values[i];
+    if (typeof v === 'number' && Number.isFinite(v) && v > 0) return v;
+  }
+  return undefined;
+}
+
+function positive(v: unknown): number | undefined {
+  return typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : undefined;
+}
+
+/**
+ * Yahoo "spark" yanıtını çözer. İki biçimi de destekler:
+ * - v7: { spark: { result: [{ symbol, response: [{ meta: {...} }] }] } }
+ * - v8: { "THYAO.IS": { close: [...], chartPreviousClose, previousClose } }
+ */
+export function parseYahooSpark(json: unknown, now: number = Date.now()): Record<string, RawQuote> {
+  const out: Record<string, RawQuote> = {};
+  const results = (json as { spark?: { result?: unknown[] } })?.spark?.result;
+  if (Array.isArray(results)) {
+    for (const r of results as { symbol?: string; response?: unknown[] }[]) {
+      if (!r?.symbol) continue;
+      const q = parseYahooChart({ chart: { result: r.response } }, now);
+      if (q) out[r.symbol] = q;
+    }
+    return out;
+  }
+  if (json && typeof json === 'object') {
+    for (const [symbol, v] of Object.entries(json as Record<string, unknown>)) {
+      const item = v as { close?: unknown; chartPreviousClose?: unknown; previousClose?: unknown } | null;
+      const price = lastNumber(item?.close);
+      if (!price) continue;
+      out[symbol] = {
+        price,
+        previousClose: positive(item?.chartPreviousClose) ?? positive(item?.previousClose),
+        fetchedAt: now,
+      };
+    }
+  }
+  return out;
+}
+
+async function fetchSpark(symbols: string[], fetchFn: FetchLike): Promise<Record<string, RawQuote>> {
+  const path = `/v7/finance/spark?symbols=${encodeURIComponent(symbols.join(','))}&range=1d&interval=1d`;
+  for (const host of HOSTS) {
+    try {
+      const res = await fetchWithTimeout(fetchFn, host + path);
+      if (!res.ok) continue;
+      return parseYahooSpark(await res.json());
+    } catch {
+      // bir sonraki sunucuyu dene
+    }
+  }
+  return {};
+}
+
+/**
+ * Çok sayıda sembolün fiyatını 20'li gruplar halinde çeker. Toplu istekte gelmeyenler için
+ * (en fazla `fallbackLimit` tane) tek tek grafik isteğine düşer.
+ */
+export async function fetchQuotesBatched(
+  symbols: string[],
+  fetchFn: FetchLike = fetch as unknown as FetchLike,
+  fallbackLimit = 30,
+): Promise<Record<string, RawQuote>> {
+  const unique = [...new Set(symbols)];
+  const out: Record<string, RawQuote> = {};
+  for (let i = 0; i < unique.length; i += SPARK_CHUNK) {
+    Object.assign(out, await fetchSpark(unique.slice(i, i + SPARK_CHUNK), fetchFn));
+  }
+  const missing = unique.filter((s) => !out[s]).slice(0, fallbackLimit);
+  // Aynı anda en fazla 4 tekil istek.
+  for (let i = 0; i < missing.length; i += 4) {
+    const part = missing.slice(i, i + 4);
+    const settled = await Promise.allSettled(part.map((s) => fetchQuote(s, fetchFn)));
+    settled.forEach((r, k) => {
+      if (r.status === 'fulfilled') out[part[k]] = r.value;
+    });
+  }
+  return out;
+}

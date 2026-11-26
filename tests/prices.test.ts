@@ -5,9 +5,11 @@ import {
   fetchHistory,
   fetchQuote,
   fetchQuotes,
+  fetchQuotesBatched,
   historyRange,
   parseYahooChart,
   parseYahooHistory,
+  parseYahooSpark,
 } from '../src/lib/prices';
 
 function chart(meta: Record<string, unknown>) {
@@ -124,4 +126,49 @@ test('fetchHistory doğru adresi çağırır', async () => {
   const s = await fetchHistory('USDTRY=X', '5y', fn);
   assert.deepEqual(s.rates, [35]);
   assert.match(calls[0], /chart\/USDTRY%3DX\?range=5y&interval=1d$/);
+});
+
+test('spark v7 biçimi', () => {
+  const q = parseYahooSpark(
+    {
+      spark: {
+        result: [
+          { symbol: 'THYAO.IS', response: [{ meta: { regularMarketPrice: 300, chartPreviousClose: 290 } }] },
+          { symbol: 'BOZUK.IS', response: [] },
+        ],
+      },
+    },
+    5,
+  );
+  assert.deepEqual(q, { 'THYAO.IS': { price: 300, previousClose: 290, name: undefined, fetchedAt: 5 } });
+});
+
+test('spark v8 biçimi (sembol anahtarlı)', () => {
+  const q = parseYahooSpark(
+    { 'AKBNK.IS': { symbol: 'AKBNK.IS', close: [60, 61.5, null], chartPreviousClose: 59 }, 'X.IS': { close: [] } },
+    5,
+  );
+  assert.deepEqual(q, { 'AKBNK.IS': { price: 61.5, previousClose: 59, fetchedAt: 5 } });
+});
+
+test('toplu fiyat: 20li gruplar, gelmeyenler tek tek', async () => {
+  const symbols = Array.from({ length: 45 }, (_, i) => `S${i}.IS`);
+  const calls: string[] = [];
+  const fn = async (url: string) => {
+    calls.push(url);
+    if (url.includes('/spark?')) {
+      const syms = decodeURIComponent(url.match(/symbols=([^&]+)/)![1]).split(',');
+      // S44 toplu yanıtta yok
+      const result = syms
+        .filter((s) => s !== 'S44.IS')
+        .map((s) => ({ symbol: s, response: [{ meta: { regularMarketPrice: 1 } }] }));
+      return { ok: true, status: 200, json: async () => ({ spark: { result } }) };
+    }
+    return { ok: true, status: 200, json: async () => chart({ regularMarketPrice: 9 }) };
+  };
+  const q = await fetchQuotesBatched(symbols, fn);
+  assert.equal(Object.keys(q).length, 45);
+  assert.equal(q['S44.IS'].price, 9);
+  assert.equal(calls.filter((u) => u.includes('/spark?')).length, 3);
+  assert.equal(calls.filter((u) => u.includes('/chart/')).length, 1);
 });

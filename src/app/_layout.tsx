@@ -11,6 +11,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import { useColorScheme } from 'react-native';
 
+import { MarketDrawerProvider } from '@/components/market-drawer';
 import { Colors, Font } from '@/constants/theme';
 import { PortfolioProvider } from '@/context/portfolio-context';
 
@@ -58,19 +59,21 @@ export default function RootLayout() {
   return (
     <PortfolioProvider>
       <ThemeProvider value={theme}>
-        <Stack
-          screenOptions={{
-            headerBackTitle: 'Geri',
-            headerShadowVisible: false,
-            headerTitleStyle: { fontFamily: Font.bold, fontSize: 17 },
-            headerLargeTitleStyle: { fontFamily: Font.extrabold },
-            headerBackTitleStyle: { fontFamily: Font.medium },
-            contentStyle: { backgroundColor: c.background },
-          }}>
-          <Stack.Screen name="index" options={{ title: 'Portföyüm', headerLargeTitle: true }} />
-          <Stack.Screen name="add" options={{ title: 'İşlem Ekle', presentation: 'modal' }} />
-          <Stack.Screen name="asset/[key]" options={{ title: '' }} />
-        </Stack>
+        <MarketDrawerProvider>
+          <Stack
+            screenOptions={{
+              headerBackTitle: 'Geri',
+              headerShadowVisible: false,
+              headerTitleStyle: { fontFamily: Font.bold, fontSize: 17 },
+              headerLargeTitleStyle: { fontFamily: Font.extrabold },
+              headerBackTitleStyle: { fontFamily: Font.medium },
+              contentStyle: { backgroundColor: c.background },
+            }}>
+            <Stack.Screen name="index" options={{ title: 'Portföyüm', headerLargeTitle: true }} />
+            <Stack.Screen name="add" options={{ title: 'İşlem Ekle', presentation: 'modal' }} />
+            <Stack.Screen name="asset/[key]" options={{ title: '' }} />
+          </Stack>
+        </MarketDrawerProvider>
         <StatusBar style="auto" />
       </ThemeProvider>
     </PortfolioProvider>

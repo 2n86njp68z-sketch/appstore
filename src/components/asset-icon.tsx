@@ -1,7 +1,9 @@
 import { useId, type ReactNode } from 'react';
 import { Platform, Text, View } from 'react-native';
 
+import { CompanyLogo } from '@/components/company-logo';
 import { Font, useColors } from '@/constants/theme';
+import { bistInfo } from '@/lib/bist';
 import Svg, {
   Circle,
   ClipPath,
@@ -296,14 +298,17 @@ export function AssetIcon({
   label: string;
   color: string;
   size: number;
-  /** Bayrak/külçe simgelerinin etrafına dilim rengiyle halka çizer. */
+  /** Logo/bayrak/külçe simgelerinin etrafına dilim rengiyle halka çizer. */
   ring?: boolean;
 }) {
-  const pictured = kind === 'metal' || (kind === 'fx' && FLAGS[symbol] != null);
+  const logo = kind === 'bist' && bistInfo(symbol)?.website != null;
+  const pictured = logo || kind === 'metal' || (kind === 'fx' && FLAGS[symbol] != null);
   if (pictured) {
     const inner = ring ? size - 7 : size;
     const icon =
-      kind === 'metal' ? (
+      kind === 'bist' ? (
+        <CompanyLogo code={symbol} label={label} color={color} size={inner} />
+      ) : kind === 'metal' ? (
         <Round size={inner}>
           <Bullion metal={symbol === 'GRAM_GUMUS' ? 'silver' : 'gold'} />
         </Round>
