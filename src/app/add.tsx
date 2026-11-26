@@ -10,8 +10,13 @@ import {
   ASSET_KINDS,
   FX_OPTIONS,
   METAL_OPTIONS,
+  assetCurrency,
+  commodityInfo,
+  displaySymbol,
+  isManualPriced,
   kindInfo,
   normalizeSymbol,
+  quantityLabelFor,
   quoteSymbolFor,
   USDTRY_SYMBOL,
 } from '@/lib/assets';
@@ -27,7 +32,7 @@ import {
 } from '@/lib/format';
 import { stockInfo } from '@/lib/markets';
 import { heldQuantity, resolveAssetQuote } from '@/lib/portfolio';
-import { fetchQuotes } from '@/lib/prices';
+import { fetchAnyQuotes } from '@/lib/prices';
 import type { AssetKind, TransactionSide } from '@/lib/types';
 
 const SYMBOL_PATTERN = /^[A-Z0-9.\-_^=]{1,20}$/;
@@ -56,6 +61,11 @@ export default function AddTransactionScreen() {
   const info = kindInfo(kind);
   const symbol = kind === 'fx' ? fxSymbol : kind === 'metal' ? metalSymbol : normalizeSymbol(kind, symbolInput);
   const held = useMemo(() => heldQuantity(transactions, kind, symbol), [transactions, kind, symbol]);
+  const currency = assetCurrency(kind, symbol);
+  const quantityLabel = quantityLabelFor(kind, symbol);
+  const manual = isManualPriced(kind);
+  const listed = stockInfo(kind, symbol);
+  const commodity = kind === 'metal' ? commodityInfo(symbol) : undefined;
 
   const qty = parseDecimal(quantity);
   const unitPrice = parseDecimal(price);
@@ -63,23 +73,18 @@ export default function AddTransactionScreen() {
 
   const inputStyle = [styles.input, { color: c.text, backgroundColor: c.background, borderColor: c.border }];
 
-  // Menüden bir hisse seçilerek gelindiyse güncel fiyatı kendiliğinden doldur.
-  useEffect(() => {
-    if (lockedAsset && kind !== 'other') fillCurrentPrice();
-    // Yalnız ilk açılışta.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   async function fillCurrentPrice() {
     setError(undefined);
     if (!symbol) {
       setError('Önce sembolü yaz.');
       return;
     }
-    const needed = kind === 'metal' ? [quoteSymbolFor(kind, symbol)!, USDTRY_SYMBOL] : [quoteSymbolFor(kind, symbol)!];
+    const key = quoteSymbolFor(kind, symbol);
+    if (!key) return;
+    const needed = kind === 'metal' && currency === 'TRY' ? [key, USDTRY_SYMBOL] : [key];
     setFetchingPrice(true);
     try {
-      const { quotes: fresh } = await fetchQuotes(needed);
+      const fresh = await fetchAnyQuotes(needed);
       const q = resolveAssetQuote(kind, symbol, { ...quotes, ...fresh }, {});
       if (q && needed.every((s) => fresh[s])) setPrice(toInputString(q.price));
       else setError(`"${symbol}" için fiyat bulunamadı. Sembolü kontrol et.`);
@@ -88,11 +93,23 @@ export default function AddTransactionScreen() {
     }
   }
 
+  // Menüden bir hisse seçilerek gelindiyse güncel fiyatı kendiliğinden doldur.
+  useEffect(() => {
+    if (!lockedAsset || isManualPriced(kind)) return;
+    const t = setTimeout(fillCurrentPrice, 0);
+    return () => clearTimeout(t);
+    // Yalnız ilk açılışta.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   function save() {
     setError(undefined);
     if (!symbol) return setError('Sembol gerekli.');
+    if ((kind === 'fund' || kind === 'bes') && !/^[A-Z0-9]{3}$/.test(symbol)) {
+      return setError('Fon kodu 3 karakter olmalı (ör. AFT).');
+    }
     if (kind !== 'other' && !SYMBOL_PATTERN.test(symbol)) return setError('Sembol yalnızca harf ve rakam içermeli.');
-    if (!(qty > 0)) return setError(`${info.quantityLabel} sıfırdan büyük olmalı.`);
+    if (!(qty > 0)) return setError(`${quantityLabel} sıfırdan büyük olmalı.`);
     if (!(unitPrice > 0)) return setError('Birim fiyat sıfırdan büyük olmalı.');
     const iso = parseTrDate(date);
     if (!iso) return setError('Tarihi GG.AA.YYYY biçiminde yaz.');
@@ -115,9 +132,11 @@ export default function AddTransactionScreen() {
         <View style={styles.assetHead}>
           <AssetIcon kind={kind} symbol={symbol} label={symbol} color={info.color} size={48} />
           <View style={{ flex: 1 }}>
-            <Text style={[Type.title, { color: c.text }]}>{symbol}</Text>
-            <Text style={[Type.subhead, { color: c.textSecondary }]} numberOfLines={1}>
-              {stockInfo(kind, symbol)?.name ?? info.label}
+            <Text style={[Type.title, { color: c.text }]}>{displaySymbol(kind, symbol)}</Text>
+            <Text style={[Type.subhead, { color: c.textSecondary }]} numberOfLines={2}>
+              {commodity
+                ? `${commodity.currency === 'USD' ? 'Dolar' : 'TL'} bazında · ${commodity.unit} fiyatı`
+                : (listed?.name ?? info.label) + (listed?.company ? ` · ${listed.company}` : '')}
             </Text>
           </View>
         </View>
@@ -132,21 +151,21 @@ export default function AddTransactionScreen() {
       )}
 
       <Card style={styles.form}>
-        {kind === 'fx' || kind === 'metal' ? (
+        {lockedAsset ? null : kind === 'fx' || kind === 'metal' ? (
           <Field label={kind === 'fx' ? 'Para birimi' : 'Tür'}>
             <View style={styles.chips}>
               {(kind === 'fx' ? FX_OPTIONS : METAL_OPTIONS).map((o) => (
                 <Chip
                   key={o.symbol}
-                  label={kind === 'fx' ? o.symbol : o.name}
+                  label={kind === 'fx' ? o.symbol : `${o.name} (${currencySymbol(assetCurrency('metal', o.symbol))})`}
                   selected={symbol === o.symbol}
                   onPress={() => (kind === 'fx' ? setFxSymbol(o.symbol) : setMetalSymbol(o.symbol))}
                 />
               ))}
             </View>
           </Field>
-        ) : lockedAsset ? null : (
-          <Field label={kind === 'other' ? 'Varlık adı / kodu' : 'Sembol'}>
+        ) : (
+          <Field label={kind === 'other' ? 'Varlık adı' : kind === 'fund' || kind === 'bes' ? 'Fon kodu' : 'Sembol'}>
             <TextInput
               value={symbolInput}
               onChangeText={setSymbolInput}
@@ -156,9 +175,9 @@ export default function AddTransactionScreen() {
               autoCorrect={false}
               style={inputStyle}
             />
-            {(kind === 'bist' || kind === 'us') && symbol.length >= (kind === 'us' ? 1 : 3) && (
-              <Text style={[styles.hint, { color: stockInfo(kind, symbol) ? c.textSecondary : c.textTertiary }]}>
-                {stockInfo(kind, symbol)?.name ?? 'Bu kod listede yok; fiyatı alınabiliyorsa yine eklenir.'}
+            {kind !== 'other' && symbol.length >= (kind === 'us' ? 1 : kind === 'crypto' ? 2 : 3) && (
+              <Text style={[styles.hint, { color: listed ? c.textSecondary : c.textTertiary }]}>
+                {listed?.name ?? 'Bu kod listede yok; fiyatı alınabiliyorsa yine eklenir.'}
               </Text>
             )}
           </Field>
@@ -178,7 +197,7 @@ export default function AddTransactionScreen() {
           )}
         </Field>
 
-        <Field label={info.quantityLabel}>
+        <Field label={quantityLabel}>
           <TextInput
             value={quantity}
             onChangeText={setQuantity}
@@ -190,9 +209,9 @@ export default function AddTransactionScreen() {
         </Field>
 
         <Field
-          label={`Birim fiyat (${currencySymbol(info.currency)})`}
+          label={`Birim fiyat (${currencySymbol(currency)})`}
           right={
-            kind !== 'other' ? (
+            !manual ? (
               <Pressable onPress={fillCurrentPrice} disabled={fetchingPrice} hitSlop={8}>
                 {fetchingPrice ? (
                   <ActivityIndicator size="small" />
@@ -210,6 +229,11 @@ export default function AddTransactionScreen() {
             keyboardType="decimal-pad"
             style={inputStyle}
           />
+          {(kind === 'fund' || kind === 'bes') && (
+            <Text style={[styles.hint, { color: c.textTertiary }]}>
+              Fon fiyatları otomatik alınamıyor. Alış fiyatını gir; güncel fiyatı fonun sayfasından güncelleyebilirsin.
+            </Text>
+          )}
         </Field>
 
         <Field label="Tarih (GG.AA.YYYY)">
@@ -226,7 +250,7 @@ export default function AddTransactionScreen() {
         {total != null && (
           <View style={[styles.totalRow, { borderTopColor: c.border }]}>
             <Text style={[styles.totalLabel, { color: c.textSecondary }]}>Toplam tutar</Text>
-            <Text style={[styles.totalValue, { color: c.text }]}>{formatMoney(total, info.currency)}</Text>
+            <Text style={[styles.totalValue, { color: c.text }]}>{formatMoney(total, currency)}</Text>
           </View>
         )}
       </Card>

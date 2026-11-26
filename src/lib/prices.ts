@@ -229,3 +229,64 @@ export async function fetchQuotesBatched(
   }
   return out;
 }
+
+// ---------------------------------------------------------------------------
+// Kripto: CoinGecko (coin kimliğiyle; aynı kısaltmalı coinler karışmaz)
+
+const COINGECKO = 'https://api.coingecko.com/api/v3/simple/price';
+const CG_CHUNK = 100;
+
+/** CoinGecko simple/price yanıtını "CG:<kimlik>" anahtarlı fiyatlara çevirir. */
+export function parseCoinGecko(json: unknown, now: number = Date.now()): Record<string, RawQuote> {
+  const out: Record<string, RawQuote> = {};
+  if (!json || typeof json !== 'object') return out;
+  for (const [id, v] of Object.entries(json as Record<string, { usd?: unknown; usd_24h_change?: unknown }>)) {
+    const price = positive(v?.usd);
+    if (!price) continue;
+    const change =
+      typeof v.usd_24h_change === 'number' && Number.isFinite(v.usd_24h_change) ? v.usd_24h_change : undefined;
+    // 24 saatlik değişimden "önceki fiyat" çıkarılır; günlük değişim gösterimi için yeterli.
+    out[`CG:${id}`] = {
+      price,
+      previousClose: change != null && change > -100 ? price / (1 + change / 100) : undefined,
+      fetchedAt: now,
+    };
+  }
+  return out;
+}
+
+export async function fetchCoinGecko(
+  ids: string[],
+  fetchFn: FetchLike = fetch as unknown as FetchLike,
+): Promise<Record<string, RawQuote>> {
+  const out: Record<string, RawQuote> = {};
+  const unique = [...new Set(ids)];
+  for (let i = 0; i < unique.length; i += CG_CHUNK) {
+    const part = unique.slice(i, i + CG_CHUNK);
+    try {
+      const res = await fetchWithTimeout(
+        fetchFn,
+        `${COINGECKO}?ids=${encodeURIComponent(part.join(','))}&vs_currencies=usd&include_24hr_change=true`,
+      );
+      if (res.ok) Object.assign(out, parseCoinGecko(await res.json()));
+    } catch {
+      // ağ hatası: bu grup atlanır
+    }
+  }
+  return out;
+}
+
+/** "CG:" anahtarlarını CoinGecko'dan, diğerlerini Yahoo'dan (20'li gruplar) çeker. */
+export async function fetchAnyQuotes(
+  keys: string[],
+  fetchFn: FetchLike = fetch as unknown as FetchLike,
+  fallbackLimit = 30,
+): Promise<Record<string, RawQuote>> {
+  const cg = keys.filter((k) => k.startsWith('CG:')).map((k) => k.slice(3));
+  const yahoo = keys.filter((k) => !k.startsWith('CG:'));
+  const [a, b] = await Promise.all([
+    cg.length ? fetchCoinGecko(cg, fetchFn) : Promise.resolve({}),
+    yahoo.length ? fetchQuotesBatched(yahoo, fetchFn, fallbackLimit) : Promise.resolve({}),
+  ]);
+  return { ...a, ...b };
+}

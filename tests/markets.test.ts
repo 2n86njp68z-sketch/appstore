@@ -41,10 +41,10 @@ test('bilinen ABD şirketleri ve web adresleri', () => {
 });
 
 test('Yahoo sembolü: hisse sınıfı noktası tireye döner', () => {
-  assert.equal(MARKETS.us.quoteSymbol('BRK.B'), 'BRK-B');
+  assert.deepEqual(MARKETS.us.quoteKeys('BRK.B'), ['BRK-B']);
   assert.equal(quoteSymbolFor('us', 'BRK.B'), 'BRK-B');
   assert.equal(quoteSymbolFor('us', 'AAPL'), 'AAPL');
-  assert.equal(MARKETS.bist.quoteSymbol('THYAO'), 'THYAO.IS');
+  assert.deepEqual(MARKETS.bist.quoteKeys('THYAO'), ['THYAO.IS']);
   assert.equal(normalizeSymbol('us', 'brk-b'), 'BRK.B');
   assert.equal(normalizeSymbol('us', ' aapl '), 'AAPL');
 });

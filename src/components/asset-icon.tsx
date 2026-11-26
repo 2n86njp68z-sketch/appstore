@@ -3,6 +3,7 @@ import { Platform, Text, View } from 'react-native';
 
 import { CompanyLogo } from '@/components/company-logo';
 import { Font, useColors } from '@/constants/theme';
+import { commodityInfo, type CommodityLook } from '@/lib/assets';
 import { stockInfo } from '@/lib/markets';
 import Svg, {
   Circle,
@@ -11,6 +12,7 @@ import Svg, {
   G,
   LinearGradient,
   Line,
+  Path,
   Polygon,
   Rect,
   Stop,
@@ -128,7 +130,46 @@ function SwissFlag() {
 const METAL_STYLES = {
   gold: { bg: ['#FEF3C7', '#FCD34D'], bar: '#F59E0B', edge: '#B45309', shine: '#FDE68A' },
   silver: { bg: ['#F1F5F9', '#CBD5E1'], bar: '#94A3B8', edge: '#475569', shine: '#E2E8F0' },
+  platinum: { bg: ['#EEF4FB', '#BFD3EA'], bar: '#7D9CC4', edge: '#36507A', shine: '#DCE7F5' },
+  palladium: { bg: ['#F3F0FA', '#D3C8EC'], bar: '#A595C7', edge: '#5B4B86', shine: '#E7E1F5' },
 } as const;
+
+/** Brent petrol: kehribar zemin üzerinde petrol damlası. */
+function OilDrop() {
+  const id = 'o' + useId().replace(/[^a-zA-Z0-9]/g, '');
+  return (
+    <>
+      <Defs>
+        <LinearGradient id={id} x1="0" y1="0" x2="0" y2="1">
+          <Stop offset="0" stopColor="#FFE8A3" />
+          <Stop offset="1" stopColor="#F59E0B" />
+        </LinearGradient>
+      </Defs>
+      <Rect x={0} y={0} width={100} height={100} fill={`url(#${id})`} />
+      <Path
+        d="M50 18 C50 18 27 46 27 61 C27 75 37.5 84 50 84 C62.5 84 73 75 73 61 C73 46 50 18 50 18 Z"
+        fill="#1F2937"
+      />
+      <Path
+        d="M39 62 C39 55 43 49 46 45"
+        stroke="#FFFFFF"
+        strokeOpacity={0.55}
+        strokeWidth={5}
+        strokeLinecap="round"
+        fill="none"
+      />
+    </>
+  );
+}
+
+/** Emtia simgesi: külçe ya da petrol damlası. */
+export function CommodityArt({ look }: { look: CommodityLook }) {
+  return look === 'oil' ? <OilDrop /> : <Bullion metal={look} />;
+}
+
+function TextBadge({ bg, text }: { bg: string; text: string }) {
+  return <Glyph bg={bg} text={text} fontSize={30} />;
+}
 
 function Bullion({ metal }: { metal: keyof typeof METAL_STYLES }) {
   const st = METAL_STYLES[metal];
@@ -204,10 +245,10 @@ function CryptoMark() {
   );
 }
 
-function FundMark() {
+function FundMark({ bg = '#64748B' }: { bg?: string }) {
   return (
     <>
-      <Rect x={0} y={0} width={100} height={100} fill="#64748B" />
+      <Rect x={0} y={0} width={100} height={100} fill={bg} />
       <Rect x={28} y={58} width={10} height={16} rx={2} fill="#FFFFFF" />
       <Rect x={45} y={44} width={10} height={30} rx={2} fill="#FFFFFF" />
       <Rect x={62} y={30} width={10} height={44} rx={2} fill="#FFFFFF" />
@@ -272,6 +313,18 @@ export function CategoryIcon({ kind, size }: { kind: AssetKind; size: number }) 
       );
     case 'fx':
       return <PairIcon main="USD" second="EUR" size={size} />;
+    case 'fund':
+      return (
+        <Round size={size}>
+          <FundMark bg="#E64980" />
+        </Round>
+      );
+    case 'bes':
+      return (
+        <Round size={size}>
+          <TextBadge bg="#2B8A3E" text="BES" />
+        </Round>
+      );
     case 'other':
       return (
         <Round size={size}>
@@ -301,16 +354,19 @@ export function AssetIcon({
   /** Logo/bayrak/külçe simgelerinin etrafına dilim rengiyle halka çizer. */
   ring?: boolean;
 }) {
-  const website = stockInfo(kind, symbol)?.website;
-  const logo = website != null;
-  const pictured = logo || kind === 'metal' || (kind === 'fx' && FLAGS[symbol] != null);
+  const info = stockInfo(kind, symbol);
+  const website = info?.website;
+  const logoUrl = info?.logo;
+  const logo = website != null || logoUrl != null;
+  const commodity = kind === 'metal' ? commodityInfo(symbol) : undefined;
+  const pictured = logo || commodity != null || (kind === 'fx' && FLAGS[symbol] != null);
   if (pictured) {
     const inner = ring ? size - 7 : size;
     const icon = logo ? (
-      <CompanyLogo website={website} label={label} color={color} size={inner} />
-    ) : kind === 'metal' ? (
+      <CompanyLogo website={website} logoUrl={logoUrl} label={label} color={color} size={inner} />
+    ) : commodity ? (
       <Round size={inner}>
-        <Bullion metal={symbol === 'GRAM_GUMUS' ? 'silver' : 'gold'} />
+        <CommodityArt look={commodity.look} />
       </Round>
     ) : (
       <PairIcon main={symbol} second="TR" size={inner} />

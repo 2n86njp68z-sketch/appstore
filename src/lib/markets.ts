@@ -1,46 +1,79 @@
 import { BIST_STOCKS } from '../data/bist';
+import { CRYPTO_COINS } from '../data/crypto';
+import { BES_FUNDS, TEFAS_FUNDS } from '../data/funds';
 import { US_STOCKS } from '../data/us';
+import { COMMODITIES, quoteSymbolFor, USDTRY_SYMBOL, assetCurrency, commodityInfo } from './assets';
 import type { AssetKind, Currency } from './types';
 
-/** Piyasa listelerindeki bir hisse. */
+/** Piyasa listelerindeki bir kalem (hisse, fon, emtia, coin). */
 export interface MarketStock {
   code: string;
   name: string;
+  /** Şirketin internet adresi (logo sitesinden alınır). */
   website?: string;
+  /** Doğrudan logo resmi (kripto). */
+  logo?: string;
+  /** Fonlarda kurucu şirket (aramada da kullanılır). */
+  company?: string;
   sector?: string;
   exchange?: string;
 }
 
-export type MarketKey = 'bist' | 'us';
+export type MarketKey = 'bist' | 'us' | 'metal' | 'fund' | 'bes' | 'crypto';
 
 export interface MarketDef {
   key: MarketKey;
   kind: AssetKind;
   title: string;
-  currency: Currency;
+  /** Listede fiyatın gösterildiği para birimi (emtiada kaleme göre değişir). */
+  currencyOf: (code: string) => Currency;
   stocks: readonly MarketStock[];
-  /** Fiyat kaynağındaki (Yahoo) sembol. */
-  quoteSymbol: (code: string) => string;
+  /** Fiyat elle mi giriliyor (fonlar)? */
+  manual: boolean;
+  /** Listedeki fiyatı göstermek için çekilmesi gereken fiyat anahtarları. */
+  quoteKeys: (code: string) => string[];
+}
+
+const COMMODITY_STOCKS: readonly MarketStock[] = COMMODITIES.map((c) => ({ code: c.symbol, name: c.name }));
+
+function quoteKeysFor(kind: AssetKind) {
+  return (code: string): string[] => {
+    const key = quoteSymbolFor(kind, code);
+    if (!key) return [];
+    // TL bazlı emtialar dolar kuruyla hesaplanır.
+    if (kind === 'metal' && commodityInfo(code)?.currency === 'TRY') return [key, USDTRY_SYMBOL];
+    return [key];
+  };
+}
+
+function market(key: MarketKey, kind: AssetKind, title: string, stocks: readonly MarketStock[], manual = false) {
+  return {
+    key,
+    kind,
+    title,
+    stocks,
+    manual,
+    currencyOf: (code: string) => assetCurrency(kind, code),
+    quoteKeys: quoteKeysFor(kind),
+  } satisfies MarketDef;
 }
 
 export const MARKETS: Record<MarketKey, MarketDef> = {
-  bist: {
-    key: 'bist',
-    kind: 'bist',
-    title: 'Türk Market',
-    currency: 'TRY',
-    stocks: BIST_STOCKS,
-    quoteSymbol: (code) => `${code}.IS`,
-  },
-  us: {
-    key: 'us',
-    kind: 'us',
-    title: 'ABD Market',
-    currency: 'USD',
-    stocks: US_STOCKS,
-    // Hisse sınıfları listede "BRK.B", Yahoo'da "BRK-B".
-    quoteSymbol: (code) => code.replace(/\./g, '-'),
-  },
+  bist: market('bist', 'bist', 'Türk Market', BIST_STOCKS),
+  us: market('us', 'us', 'ABD Market', US_STOCKS),
+  metal: market('metal', 'metal', 'Emtia', COMMODITY_STOCKS),
+  fund: market('fund', 'fund', 'TEFAS', TEFAS_FUNDS, true),
+  bes: market('bes', 'bes', 'BES', BES_FUNDS, true),
+  crypto: market('crypto', 'crypto', 'Kripto', CRYPTO_COINS),
+};
+
+const KIND_TO_MARKET: Partial<Record<AssetKind, MarketKey>> = {
+  bist: 'bist',
+  us: 'us',
+  metal: 'metal',
+  fund: 'fund',
+  bes: 'bes',
+  crypto: 'crypto',
 };
 
 const byCode = new Map<MarketKey, Map<string, MarketStock>>();
@@ -54,10 +87,10 @@ function index(key: MarketKey): Map<string, MarketStock> {
   return m;
 }
 
-/** Varlık türüne göre piyasa listesindeki hisse (Türk/ABD Market dışı türler için undefined). */
+/** Varlık türüne göre piyasa listesindeki kalem (döviz ve "Diğer" için undefined). */
 export function stockInfo(kind: AssetKind, code: string): MarketStock | undefined {
-  if (kind !== 'bist' && kind !== 'us') return undefined;
-  return index(kind).get(code);
+  const key = KIND_TO_MARKET[kind];
+  return key ? index(key).get(code) : undefined;
 }
 
 /** Aramada Türkçe harf farkını yok sayar: "türk" = "TURK", "İŞ" = "IS". */
@@ -90,7 +123,7 @@ function folded(list: readonly MarketStock[]): Folded[] {
   let f = foldedCache.get(list);
   if (!f) {
     f = list.map((s) => {
-      const name = foldForSearch(s.name);
+      const name = foldForSearch(s.company ? `${s.name} ${s.company}` : s.name);
       return { stock: s, code: foldForSearch(s.code), name, words: name.split(/[\s,.()&/-]+/) };
     });
     foldedCache.set(list, f);
@@ -99,8 +132,8 @@ function folded(list: readonly MarketStock[]): Folded[] {
 }
 
 /**
- * Kod veya şirket adına göre arar. Sıralama: kodu tam eşleşen, kodu böyle başlayan, adındaki bir
- * kelime böyle başlayan, adında geçen.
+ * Kod veya ada (fonlarda şirket adına da) göre arar. Sıralama: kodu tam eşleşen, kodu böyle başlayan,
+ * adındaki bir kelime böyle başlayan, adında geçen.
  */
 export function searchStocks(query: string, list: readonly MarketStock[]): MarketStock[] {
   const q = foldForSearch(query);
@@ -114,7 +147,8 @@ export function searchStocks(query: string, list: readonly MarketStock[]): Marke
     else if (f.code.includes(q) || f.name.includes(q)) score = 3;
     if (score >= 0) scored.push({ stock: f.stock, score });
   }
-  scored.sort((a, b) => a.score - b.score || a.stock.code.localeCompare(b.stock.code));
+  // Aynı puanda listedeki sıra korunur (kriptoda piyasa değeri sırası).
+  scored.sort((a, b) => a.score - b.score);
   return scored.map((s) => s.stock);
 }
 

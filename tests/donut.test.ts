@@ -172,8 +172,8 @@ test('altın ve gümüş sabit renk alır, diğer renklerle çakışmaz', () => 
   );
   const c = buildChartData(metals, computeSummary(metals));
   const byLabel = Object.fromEntries(c[0].assets.map((a) => [a.label, a.color]));
-  assert.equal(byLabel['Gram Altın'], '#F2B705');
-  assert.equal(byLabel['Gram Gümüş'], '#A7B1C2');
+  assert.equal(byLabel['Gram Altın'], '#F7C948');
+  assert.equal(byLabel['Gram Gümüş'], '#B8C2D0');
 });
 
 const fmt = (p: number) => `%${Math.round(p)}`;

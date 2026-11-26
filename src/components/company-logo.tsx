@@ -24,28 +24,33 @@ function LetterAvatar({ label, color, size }: { label: string; color: string; si
  */
 export function CompanyLogo({
   website,
+  logoUrl,
   label,
   color,
   size,
 }: {
-  /** Şirketin internet adresi; yoksa doğrudan harf rozeti. */
+  /** Şirketin internet adresi; logo sitesinden alınır. */
   website?: string;
+  /** Doğrudan logo resmi (ör. kripto). Varsa önce o denenir. */
+  logoUrl?: string;
   label: string;
   color: string;
   size: number;
 }) {
-  const candidates = website ? logoCandidates(website) : [];
-  const known = website ? found.get(website) : undefined;
+  const candidates = [...(logoUrl ? [logoUrl] : []), ...(website ? logoCandidates(website) : [])];
+  // Önbellek anahtarı: bu kaynağın kimliği
+  const source = logoUrl ?? website;
+  const known = source ? found.get(source) : undefined;
   const [index, setIndex] = useState(known ?? 0);
   const [loaded, setLoaded] = useState(false);
   const letter = <LetterAvatar label={label} color={color} size={size} />;
 
-  if (!website || index < 0 || index >= candidates.length) return letter;
+  if (!source || index < 0 || index >= candidates.length) return letter;
 
   const next = () => {
     setLoaded(false);
     const n = index + 1;
-    if (n >= candidates.length) found.set(website, -1);
+    if (n >= candidates.length) found.set(source, -1);
     setIndex(n >= candidates.length ? -1 : n);
   };
 
@@ -66,7 +71,7 @@ export function CompanyLogo({
           onLoad={(e) => {
             const src = (e.nativeEvent as { source?: { width?: number; height?: number } }).source;
             if (src?.width && src.width < MIN_PX) return next();
-            found.set(website, index);
+            found.set(source, index);
             setLoaded(true);
           }}
           accessibilityIgnoresInvertColors

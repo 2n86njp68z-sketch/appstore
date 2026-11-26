@@ -6,7 +6,7 @@ import { AssetIcon } from '@/components/asset-icon';
 import { Card, PrimaryButton, SectionTitle, StatRow } from '@/components/ui';
 import { Font, pnlColor, useColors } from '@/constants/theme';
 import { usePortfolio } from '@/context/portfolio-context';
-import { displaySymbol, kindInfo } from '@/lib/assets';
+import { displaySymbol, isManualPriced, kindInfo, quantityUnit } from '@/lib/assets';
 import {
   currencySymbol,
   formatMoney,
@@ -95,7 +95,7 @@ export default function AssetScreen() {
             </Text>
           )}
 
-          {h.kind === 'other' &&
+          {isManualPriced(h.kind) &&
             (editingPrice ? (
               <View style={styles.priceEdit}>
                 <TextInput
@@ -126,7 +126,7 @@ export default function AssetScreen() {
 
         <SectionTitle>Pozisyon</SectionTitle>
         <Card style={{ paddingVertical: 8 }}>
-          <StatRow label={`Eldeki ${info.quantityLabel.toLowerCase()}`} value={formatQuantity(h.quantity)} />
+          <StatRow label={`Eldeki ${quantityUnit(h.kind, h.symbol)}`} value={formatQuantity(h.quantity)} />
           {h.quantity > 0 && (
             <>
               <StatRow

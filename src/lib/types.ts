@@ -1,5 +1,5 @@
 /** Varlık türleri. */
-export type AssetKind = 'bist' | 'us' | 'crypto' | 'fx' | 'metal' | 'other';
+export type AssetKind = 'bist' | 'us' | 'crypto' | 'fx' | 'metal' | 'fund' | 'bes' | 'other';
 
 /** Fiyatların tutulduğu para birimi. */
 export type Currency = 'TRY' | 'USD';

@@ -1,9 +1,9 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { AppState } from 'react-native';
 
-import { assetKey } from '@/lib/assets';
+import { assetKey, isManualPriced } from '@/lib/assets';
 import { computeHoldings, computeSummary, DISPLAY_CURRENCIES, requiredQuoteSymbols } from '@/lib/portfolio';
-import { fetchHistory, fetchQuotes, historyRange } from '@/lib/prices';
+import { fetchAnyQuotes, fetchHistory, historyRange } from '@/lib/prices';
 import {
   loadAll,
   saveDisplayCurrency,
@@ -70,6 +70,8 @@ interface PortfolioContextValue {
   addTransaction: (t: NewTransaction) => void;
   deleteTransaction: (id: string) => void;
   setManualPrice: (kind: AssetKind, symbol: string, price: number) => void;
+  /** Elle girilen güncel fiyatlar (anahtar: "tür:sembol"). */
+  manualPrices: Record<string, number>;
 }
 
 const PortfolioContext = createContext<PortfolioContextValue | null>(null);
@@ -109,7 +111,8 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
       setRefreshing(true);
       try {
         const symbols = requiredQuoteSymbols(transactionsRef.current);
-        const { quotes: fresh, failed } = await fetchQuotes(symbols);
+        const fresh = await fetchAnyQuotes(symbols);
+        const failed = symbols.filter((sym) => !fresh[sym]).map((sym) => sym.replace(/^CG:/, ''));
         const gotAny = Object.keys(fresh).length > 0;
         setQuotes((prev) => {
           const merged = { ...prev, ...fresh };
@@ -177,7 +180,7 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
       transactionsRef.current = next;
       setTransactions(next);
       saveTransactions(next).catch(() => {});
-      if (t.kind === 'other') {
+      if (isManualPriced(t.kind)) {
         // Elle fiyatlanan varlıkta henüz fiyat yoksa ilk işlem fiyatını güncel fiyat kabul et.
         const key = assetKey(t.kind, t.symbol);
         setManualPrices((prev) => {
@@ -187,7 +190,7 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
           return nextPrices;
         });
       }
-      if ((isNewAsset && t.kind !== 'other') || isOldest) refresh();
+      if ((isNewAsset && !isManualPriced(t.kind)) || isOldest) refresh();
     },
     [refresh],
   );
@@ -237,8 +240,10 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
       addTransaction,
       deleteTransaction,
       setManualPrice,
+      manualPrices,
     }),
     [
+      manualPrices,
       displayCurrency,
       cycleDisplayCurrency,
       ready,

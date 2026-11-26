@@ -1,10 +1,11 @@
 import {
+  assetCurrency,
   assetKey,
+  commodityInfo,
   EURTRY_SYMBOL,
   FX_RATE_SYMBOL,
   fixedName,
-  kindInfo,
-  METAL_SOURCE,
+  isManualPriced,
   quoteSymbolFor,
   TROY_OUNCE_GRAMS,
   USDTRY_SYMBOL,
@@ -82,20 +83,26 @@ export function resolveAssetQuote(
   raw: Record<string, RawQuote>,
   manualPrices: Record<string, number>,
 ): AssetQuote | undefined {
-  if (kind === 'other') {
+  if (isManualPriced(kind)) {
     const p = manualPrices[assetKey(kind, symbol)];
     return p != null && Number.isFinite(p) ? { price: p, manual: true } : undefined;
   }
   if (kind === 'metal') {
-    const ounce = raw[METAL_SOURCE[symbol]];
+    const c = commodityInfo(symbol);
+    const src = c ? raw[c.source] : undefined;
+    if (!c || !src) return undefined;
+    // Dolar bazında: kontrat fiyatı doğrudan (USD/ons, USD/varil).
+    if (c.currency === 'USD') return { price: src.price, previousClose: src.previousClose, fetchedAt: src.fetchedAt };
+    // TL bazında: kurla çevrilir; metallerde ons → gram.
     const usd = raw[USDTRY_SYMBOL];
-    if (!ounce || !usd) return undefined;
-    const price = (ounce.price * usd.price) / TROY_OUNCE_GRAMS;
+    if (!usd) return undefined;
+    const perUnit = c.unit === 'gram' ? 1 / TROY_OUNCE_GRAMS : 1;
+    const price = src.price * usd.price * perUnit;
     const previousClose =
-      ounce.previousClose != null && usd.previousClose != null
-        ? (ounce.previousClose * usd.previousClose) / TROY_OUNCE_GRAMS
+      src.previousClose != null && usd.previousClose != null
+        ? src.previousClose * usd.previousClose * perUnit
         : undefined;
-    return { price, previousClose, fetchedAt: Math.min(ounce.fetchedAt, usd.fetchedAt) };
+    return { price, previousClose, fetchedAt: Math.min(src.fetchedAt, usd.fetchedAt) };
   }
   const s = quoteSymbolFor(kind, symbol);
   const q = s ? raw[s] : undefined;
@@ -216,7 +223,7 @@ export function computeHoldings(
 
   for (const [key, list] of groups) {
     const { kind, symbol } = list[0];
-    const native = kindInfo(kind).currency;
+    const native = assetCurrency(kind, symbol);
     const sorted = sortTransactions(list);
     const pos = computePosition(sorted);
     const quote = resolveAssetQuote(kind, symbol, raw, manualPrices);

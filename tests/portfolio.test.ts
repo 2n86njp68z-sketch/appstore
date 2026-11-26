@@ -60,7 +60,9 @@ test('sembol temizleme ve fiyat kaynağı sembolleri', () => {
   assert.equal(normalizeSymbol('crypto', 'usdt'), 'USDT');
   assert.equal(normalizeSymbol('other', '  ak  portföy  '), 'AK PORTFÖY');
   assert.equal(quoteSymbolFor('bist', 'THYAO'), 'THYAO.IS');
-  assert.equal(quoteSymbolFor('crypto', 'BTC'), 'BTC-USD');
+  // Listedeki coinler CoinGecko kimliğiyle, listede olmayanlar Yahoo'dan
+  assert.equal(quoteSymbolFor('crypto', 'BTC'), 'CG:bitcoin');
+  assert.equal(quoteSymbolFor('crypto', 'YOKBOYLECOIN'), 'YOKBOYLECOIN-USD');
   assert.equal(quoteSymbolFor('fx', 'EUR'), 'EURTRY=X');
   assert.equal(quoteSymbolFor('metal', 'GRAM_ALTIN'), 'GC=F');
   assert.equal(quoteSymbolFor('other', 'AFT'), null);

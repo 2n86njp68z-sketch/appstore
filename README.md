@@ -19,10 +19,14 @@ Expo (React Native) ile yazıldı. Geliştirmek ve App Store'a göndermek için 
   - Hisse ve kriptolarda dilim rengiyle harf rozeti.
 - **Piyasalar menüsü (sol üstteki ☰):**
   - En üstte arama çubuğu var. Kod ya da şirket adı yazdıkça sonuçlar anında süzülür, Türkçe harf farkı önemli değildir.
-  - Bölümler: Türk Market, ABD Market, Emtia, Fon, ABD ETF. Türk Market ve ABD Market hazır, diğerleri "yakında".
-  - Bölüme dokununca hisseler alt alta açılır. Aynı anda tek bölüm açık kalır.
+  - Bölümler: Türk Market, ABD Market, Emtia, TEFAS, BES, Kripto, ABD ETF. ABD ETF dışındakiler hazır, ABD ETF "yakında".
+  - Bölüme dokununca kalemler alt alta açılır. Aynı anda tek bölüm açık kalır.
     - Türk Market: BIST'teki 629 hisse
     - ABD Market: NASDAQ, NYSE ve NYSE American'daki 5.866 hisse (ADR'ler dahil; ETF, varant ve imtiyazlı paylar hariç)
+    - Emtia: altın, gümüş, platin, paladyum ve Brent petrol; her biri dolar bazında ($/ons, Brent $/varil) ve TL bazında (₺/gram, Brent ₺/varil)
+    - TEFAS: 2.106 yatırım fonu
+    - BES: 288 emeklilik yatırım fonu
+    - Kripto: piyasa değerine göre ilk 491 coin
   - Her satırda logo, kod, şirket adı, fiyat ve günlük değişim yazar.
   - Arama iki piyasada birden yapılır.
   - Fiyatlar yalnız ekranda görünen hisseler için 20'li gruplar halinde çekilir.
@@ -33,8 +37,9 @@ Expo (React Native) ile yazıldı. Geliştirmek ve App Store'a göndermek için 
   - ABD Market: ABD hisseleri (AAPL, BRK.B…)
   - Kripto (BTC, ETH…)
   - Döviz (USD, EUR, GBP, CHF)
-  - Emtia: gram altın ve gram gümüş
-  - "Diğer": fiyatını elle girdiğin fon, mevduat vb.
+  - Emtia: altın, gümüş, platin, paladyum, Brent petrol (dolar ve TL bazında)
+  - TEFAS ve BES fonları (fiyat elle girilir)
+  - "Diğer": fiyatını elle girdiğin mevduat vb.
 - **Alış/satış kaydı:** Ortalama maliyet ve gerçekleşen kâr/zarar hesaplanır
 - **Fiyatlar:** Otomatik çekilir. Aşağı çekince ve uygulama öne gelince yenilenir.
 - **Kayıt:** Veriler yalnızca telefonda tutulur. Hesap ya da sunucu gerekmez.
@@ -57,7 +62,7 @@ src/
     asset-icon.tsx      Bayraklar, külçeler ve harf rozetleri (SVG)
     ui.tsx              Ortak bileşenler (kart, buton…)
   context/              Uygulama durumu, kayıt ve fiyat yenileme
-  data/bist.ts, us.ts   BIST ve ABD hisseleri (üretilmiş dosyalar)
+  data/                 BIST, ABD, fon ve kripto listeleri (üretilmiş dosyalar)
   lib/
     markets.ts          Piyasalar, hisse arama ve logo adresleri
     portfolio.ts        Hesaplamalar (ortalama maliyet, K/Z, TL/USD/EUR toplamlar)
@@ -73,6 +78,12 @@ tests/                  Birim testleri
 - Hisse listeleri ücretsiz ve herkese açık kaynaklardan üretilir:
   - `src/data/bist.ts`: hisse kodu, adı ve sektörü **İş Yatırım**'dan, internet adresi **KAP**'tan
   - `src/data/us.ts`: kod, ad ve borsa **NASDAQ Trader** sembol dizininden, internet adresi **Wikidata**'dan (CC0)
+  - `src/data/funds.ts`: TEFAS (yatırım fonu) ve BES (emeklilik yatırım fonu) listeleri **KAP**'tan; logolar kurucu şirketin sitesinden
+  - `src/data/crypto.ts`: **CoinGecko**'dan ilk 500 coin (logolarıyla)
+- Fiyatlar:
+  - Hisse, döviz ve emtia: Yahoo Finance
+  - Kripto: CoinGecko, coin kimliğiyle; aynı kısaltmalı coinler karışmaz
+  - Fonlar (TEFAS/BES): **elle girilir.** Günlük fon fiyatları yalnız TEFAS'ta var ve TEFAS sitesi otomatik erişime karşı korunuyor. Lisanslı bir veri kaynağı bağlanınca otomatik olabilir.
 - ABD'de bilinen şirketlerin hepsinin internet adresi var. Wikidata'da kaydı olmayan küçük şirketlerde (yaklaşık 3.700) harf rozeti görünür.
 - Logolar uygulama çalışırken şirketin kendi sitesinden alınır. Sıra şöyle:
   1. Sitenin büyük simgesi (`apple-touch-icon`)
@@ -88,6 +99,10 @@ python3 -I scripts/fetch-bist-sources.py /tmp/bist
 python3 -I scripts/build-bist-data.py /tmp/bist/stocks.json /tmp/bist/sites.json > src/data/bist.ts
 python3 -I scripts/fetch-us-sources.py /tmp/us
 python3 -I scripts/build-us-data.py /tmp/us/us-stocks.json /tmp/us/us-sites.json > src/data/us.ts
+python3 -I scripts/fetch-fund-sources.py /tmp/fon       # pdftotext gerekir (poppler-utils)
+python3 -I scripts/build-fund-data.py /tmp/fon/funds.json > src/data/funds.ts
+python3 -I scripts/fetch-crypto-sources.py /tmp/kripto
+python3 -I scripts/build-crypto-data.py /tmp/kripto/crypto.json > src/data/crypto.ts
 ```
 
 ## Komutlar
