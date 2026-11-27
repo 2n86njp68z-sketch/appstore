@@ -37,6 +37,8 @@ export interface Transaction {
   date: string;
   /** Oluşturulma zamanı (ms); aynı gündeki işlemleri sıralamak için. */
   createdAt: number;
+  /** Ait olduğu portföy; yoksa Ana portföy. */
+  portfolioId?: string;
 }
 
 /** Fiyat kaynağından gelen ham fiyat (sembol bazında). */

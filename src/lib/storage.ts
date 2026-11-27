@@ -1,6 +1,13 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import type { PriceAlert } from './alerts';
+import {
+  migrateTargets,
+  normalizePortfolios,
+  validActive,
+  type Portfolio,
+  type TargetsByPortfolio,
+} from './portfolios';
 import type { BenchSeries } from './benchmarks';
 import type { PriceHistory } from './history';
 import type { CorporateAction, DisplayCurrency, FxHistory, RawQuote, Transaction } from './types';
@@ -16,6 +23,9 @@ const KEYS = {
   benchSeries: 'portfoy/benchSeries/v1',
   priceHistory: 'portfoy/priceHistory/v1',
   alerts: 'portfoy/alerts/v1',
+  portfolios: 'portfoy/portfolios/v1',
+  activePortfolio: 'portfoy/activePortfolio/v1',
+  targetsV2: 'portfoy/targets/v2',
   corporateActions: 'portfoy/corporateActions/v1',
   targets: 'portfoy/targets/v1',
   displayCurrency: 'portfoy/displayCurrency/v1',
@@ -29,6 +39,9 @@ export interface StoredData {
   benchSeries: BenchSeries;
   priceHistory: PriceHistory;
   alerts: PriceAlert[];
+  portfolios: Portfolio[];
+  activePortfolio: string;
+  targetsByPortfolio: TargetsByPortfolio;
   corporateActions: StoredActions;
   /** Dengeleme hedef oranları (varlık anahtarı → %). */
   targets: Record<string, number>;
@@ -56,6 +69,9 @@ export async function loadAll(): Promise<StoredData> {
     targets,
     priceHistory,
     alerts,
+    portfolios,
+    activePortfolio,
+    targetsV2,
   ] = await Promise.all([
     readJson<Transaction[]>(KEYS.transactions, []),
     readJson<Record<string, number>>(KEYS.manualPrices, {}),
@@ -67,6 +83,9 @@ export async function loadAll(): Promise<StoredData> {
     readJson<Record<string, number>>(KEYS.targets, {}),
     readJson<PriceHistory>(KEYS.priceHistory, {}),
     readJson<PriceAlert[]>(KEYS.alerts, []),
+    readJson<unknown>(KEYS.portfolios, null),
+    readJson<unknown>(KEYS.activePortfolio, null),
+    readJson<unknown>(KEYS.targetsV2, null),
   ]);
   return {
     transactions: Array.isArray(transactions) ? transactions : [],
@@ -76,6 +95,9 @@ export async function loadAll(): Promise<StoredData> {
     benchSeries,
     priceHistory,
     alerts: Array.isArray(alerts) ? alerts : [],
+    portfolios: normalizePortfolios(portfolios),
+    activePortfolio: validActive(activePortfolio, normalizePortfolios(portfolios)),
+    targetsByPortfolio: migrateTargets(targetsV2, targets),
     corporateActions,
     targets,
     displayCurrency: ['TRY', 'USD', 'EUR'].includes(displayCurrency) ? displayCurrency : 'TRY',
@@ -129,4 +151,16 @@ export async function loadAlertData(): Promise<{ alerts: PriceAlert[]; manualPri
     readJson<Record<string, number>>(KEYS.manualPrices, {}),
   ]);
   return { alerts: Array.isArray(alerts) ? alerts : [], manualPrices };
+}
+
+export function savePortfolios(portfolios: Portfolio[]) {
+  return AsyncStorage.setItem(KEYS.portfolios, JSON.stringify(portfolios));
+}
+
+export function saveActivePortfolio(id: string) {
+  return AsyncStorage.setItem(KEYS.activePortfolio, JSON.stringify(id));
+}
+
+export function saveTargetsByPortfolio(targets: TargetsByPortfolio) {
+  return AsyncStorage.setItem(KEYS.targetsV2, JSON.stringify(targets));
 }

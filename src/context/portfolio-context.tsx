@@ -7,6 +7,20 @@ import { BENCH_SYMBOLS, computeBenchmarks, type BenchmarkResult, type BenchSerie
 import { sendAlertNotifications, syncAlertTask } from '@/lib/alert-task';
 import { alertQuoteSymbols, checkAlerts, markFired, validAlerts, type PriceAlert } from '@/lib/alerts';
 import { todayIso } from '@/lib/format';
+import {
+  ALL_PORTFOLIOS,
+  DEFAULT_PORTFOLIOS,
+  filterByPortfolio,
+  MAIN_PORTFOLIO,
+  migrateTargets,
+  normalizePortfolios,
+  portfolioOf,
+  targetPortfolio,
+  uniqueName,
+  validActive,
+  type Portfolio,
+  type TargetsByPortfolio,
+} from '@/lib/portfolios';
 import { refreshPriceHistory, type PriceHistory } from '@/lib/history';
 import { computeHoldings, computeSummary, DISPLAY_CURRENCIES, FxRates, requiredQuoteSymbols } from '@/lib/portfolio';
 import {
@@ -30,7 +44,9 @@ import {
   saveManualPrices,
   savePriceHistory,
   saveQuotes,
-  saveTargets,
+  saveActivePortfolio,
+  savePortfolios,
+  saveTargetsByPortfolio,
   saveTransactions,
   type StoredActions,
 } from '@/lib/storage';
@@ -215,6 +231,18 @@ interface PortfolioContextValue {
   addAlert: (a: Pick<PriceAlert, 'kind' | 'symbol' | 'op' | 'price'>) => void;
   removeAlert: (id: string) => void;
   setAlertActive: (id: string, active: boolean) => void;
+  /** Bütün portföylerin işlemleri (transactions yalnız seçili görünümünkiler). */
+  allTransactions: Transaction[];
+  portfolios: Portfolio[];
+  /** Seçili portföy kimliği ya da "all" (Tümü). */
+  activePortfolio: string;
+  setActivePortfolio: (id: string) => void;
+  addPortfolio: (name: string) => string;
+  renamePortfolio: (id: string, name: string) => void;
+  /** Portföyü ve işlemlerini siler (Ana portföy silinemez). */
+  deletePortfolio: (id: string) => void;
+  /** Portföy başına değer (seçili para biriminde). */
+  portfolioValues: Record<string, number>;
 }
 
 const PortfolioContext = createContext<PortfolioContextValue | null>(null);
@@ -225,7 +253,7 @@ function newId(): string {
 
 export function PortfolioProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [allTransactions, setTransactions] = useState<Transaction[]>([]);
   const [manualPrices, setManualPrices] = useState<Record<string, number>>({});
   const [quotes, setQuotes] = useState<Record<string, RawQuote>>({});
   const [refreshing, setRefreshing] = useState(false);
@@ -234,7 +262,11 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
   const [fxHistory, setFxHistory] = useState<FxHistory>({});
   const [benchSeries, setBenchSeries] = useState<BenchSeries>({});
   const [corporateActions, setCorporateActions] = useState<StoredActions>({});
-  const [targets, setTargetsState] = useState<Record<string, number>>({});
+  const [targetsByPortfolio, setTargetsByPortfolio] = useState<TargetsByPortfolio>({});
+  const [portfolios, setPortfolios] = useState<Portfolio[]>(DEFAULT_PORTFOLIOS);
+  const [activePortfolio, setActiveState] = useState<string>(MAIN_PORTFOLIO);
+  const activeRef = useRef(activePortfolio);
+  const portfoliosRef = useRef(portfolios);
   const [priceHistory, setPriceHistory] = useState<PriceHistory>({});
   const [alerts, setAlertsState] = useState<PriceAlert[]>([]);
   const alertsRef = useRef(alerts);
@@ -248,7 +280,7 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
   const [displayCurrency, setDisplayCurrency] = useState<DisplayCurrency>('TRY');
   // Geri çağırmaların her zaman son değeri görmesi için; değişiklik yapan işleyiciler de bunları hemen günceller.
   const fxHistoryRef = useRef(fxHistory);
-  const transactionsRef = useRef(transactions);
+  const transactionsRef = useRef(allTransactions);
   const lastUpdatedRef = useRef(lastUpdated);
   const inFlight = useRef<Promise<void> | null>(null);
   useEffect(() => {
@@ -261,8 +293,8 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
     manualPricesRef.current = manualPrices;
   }, [manualPrices]);
   useEffect(() => {
-    transactionsRef.current = transactions;
-  }, [transactions]);
+    transactionsRef.current = allTransactions;
+  }, [allTransactions]);
   useEffect(() => {
     lastUpdatedRef.current = lastUpdated;
   }, [lastUpdated]);
@@ -359,7 +391,11 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
       benchSeriesRef.current = data.benchSeries;
       setCorporateActions(data.corporateActions);
       actionsRef.current = data.corporateActions;
-      setTargetsState(data.targets);
+      setTargetsByPortfolio(data.targetsByPortfolio);
+      setPortfolios(data.portfolios);
+      portfoliosRef.current = data.portfolios;
+      setActiveState(data.activePortfolio);
+      activeRef.current = data.activePortfolio;
       setAlertsState(data.alerts);
       alertsRef.current = data.alerts;
       manualPricesRef.current = data.manualPrices;
@@ -389,7 +425,12 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
 
   const addTransaction = useCallback(
     (t: NewTransaction) => {
-      const tx: Transaction = { ...t, id: newId(), createdAt: Date.now() };
+      const tx: Transaction = {
+        ...t,
+        portfolioId: t.portfolioId ?? targetPortfolio(activeRef.current),
+        id: newId(),
+        createdAt: Date.now(),
+      };
       const isNewAsset = !transactionsRef.current.some((x) => x.kind === t.kind && x.symbol === t.symbol);
       const isOldest = transactionsRef.current.every((x) => t.date < x.date);
       const next = [...transactionsRef.current, tx];
@@ -428,9 +469,68 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
 
   /** Dengeleme hedef oranlarını kaydeder (varlık anahtarı → %). */
   const setTargets = useCallback((next: Record<string, number>) => {
-    setTargetsState(next);
-    saveTargets(next).catch(() => {});
+    setTargetsByPortfolio((prev) => {
+      const all = { ...prev, [activeRef.current]: next };
+      saveTargetsByPortfolio(all).catch(() => {});
+      return all;
+    });
   }, []);
+
+  const updatePortfolios = useCallback((next: Portfolio[]) => {
+    portfoliosRef.current = next;
+    setPortfolios(next);
+    savePortfolios(next).catch(() => {});
+  }, []);
+
+  const setActivePortfolio = useCallback((id: string) => {
+    const next = validActive(id, portfoliosRef.current);
+    activeRef.current = next;
+    setActiveState(next);
+    saveActivePortfolio(next).catch(() => {});
+  }, []);
+
+  const addPortfolio = useCallback(
+    (name: string) => {
+      const p: Portfolio = { id: newId(), name: uniqueName(name, portfoliosRef.current), createdAt: Date.now() };
+      updatePortfolios([...portfoliosRef.current, p]);
+      return p.id;
+    },
+    [updatePortfolios],
+  );
+
+  const renamePortfolio = useCallback(
+    (id: string, name: string) =>
+      updatePortfolios(
+        portfoliosRef.current.map((p) =>
+          p.id === id ? { ...p, name: uniqueName(name, portfoliosRef.current, id) } : p,
+        ),
+      ),
+    [updatePortfolios],
+  );
+
+  const deletePortfolio = useCallback(
+    (id: string) => {
+      if (id === MAIN_PORTFOLIO) return;
+      const next = transactionsRef.current.filter((t) => portfolioOf(t) !== id);
+      transactionsRef.current = next;
+      setTransactions(next);
+      saveTransactions(next).catch(() => {});
+      const list = portfoliosRef.current.filter((p) => p.id !== id);
+      updatePortfolios(list);
+      setTargetsByPortfolio((prev) => {
+        const rest = { ...prev };
+        delete rest[id];
+        saveTargetsByPortfolio(rest).catch(() => {});
+        return rest;
+      });
+      if (activeRef.current === id || (activeRef.current === ALL_PORTFOLIOS && list.length < 2)) {
+        activeRef.current = MAIN_PORTFOLIO;
+        setActiveState(MAIN_PORTFOLIO);
+        saveActivePortfolio(MAIN_PORTFOLIO).catch(() => {});
+      }
+    },
+    [updatePortfolios],
+  );
 
   const updateAlerts = useCallback((next: PriceAlert[]) => {
     alertsRef.current = next;
@@ -465,21 +565,36 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
         transactions: transactionsRef.current,
         manualPrices,
         displayCurrency,
-        extra: { targets, alerts: alertsRef.current },
+        extra: {
+          targets: targetsByPortfolio[MAIN_PORTFOLIO] ?? {},
+          targetsByPortfolio,
+          alerts: alertsRef.current,
+          portfolios: portfoliosRef.current,
+          activePortfolio: activeRef.current,
+        },
       }),
-    [manualPrices, displayCurrency, targets],
+    [manualPrices, displayCurrency, targetsByPortfolio],
   );
 
   /** Yedekten geri yükler: "replace" mevcut işlemlerin yerine koyar, "merge" eksik olanları ekler. */
   const importTransactions = useCallback(
     (incoming: Transaction[], mode: 'replace' | 'merge', newTargets?: Record<string, number>) => {
-      const next = mode === 'replace' ? incoming : mergeTransactions(transactionsRef.current, incoming);
+      // Seçili portföye ("Tümü"nde Ana portföye); "replace" yalnız o portföyün işlemlerinin yerine geçer
+      const target = targetPortfolio(activeRef.current);
+      const tagged = incoming.map((t) => ({ ...t, portfolioId: target }));
+      const next =
+        mode === 'replace'
+          ? [...transactionsRef.current.filter((t) => portfolioOf(t) !== target), ...tagged]
+          : mergeTransactions(transactionsRef.current, tagged);
       transactionsRef.current = next;
       setTransactions(next);
       saveTransactions(next).catch(() => {});
       if (newTargets && Object.keys(newTargets).length) {
-        setTargetsState(newTargets);
-        saveTargets(newTargets).catch(() => {});
+        setTargetsByPortfolio((prev) => {
+          const all = { ...prev, [target]: newTargets };
+          saveTargetsByPortfolio(all).catch(() => {});
+          return all;
+        });
       }
       refresh();
     },
@@ -511,17 +626,30 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
           mode === 'replace' ? savedAlerts : [...alertsRef.current, ...savedAlerts.filter((a) => !ids.has(a.id))],
         );
       }
-      const savedTargets = data.extra?.targets;
-      if (savedTargets && typeof savedTargets === 'object') {
-        setTargetsState((prev) => {
-          const next = mode === 'replace' ? (savedTargets as Record<string, number>) : { ...savedTargets, ...prev };
-          saveTargets(next).catch(() => {});
+      // Portföyler: yedektekiler (eski yedeklerde yalnız Ana portföy)
+      const savedPortfolios = normalizePortfolios(data.extra?.portfolios);
+      if (mode === 'replace') {
+        updatePortfolios(savedPortfolios);
+        const act = validActive(data.extra?.activePortfolio, savedPortfolios);
+        activeRef.current = act;
+        setActiveState(act);
+        saveActivePortfolio(act).catch(() => {});
+      } else {
+        const ids = new Set(portfoliosRef.current.map((p) => p.id));
+        const added = savedPortfolios.filter((p) => !ids.has(p.id));
+        if (added.length) updatePortfolios([...portfoliosRef.current, ...added]);
+      }
+      const savedTargets = migrateTargets(data.extra?.targetsByPortfolio, data.extra?.targets);
+      if (Object.keys(savedTargets).length || mode === 'replace') {
+        setTargetsByPortfolio((prev) => {
+          const next = mode === 'replace' ? savedTargets : { ...savedTargets, ...prev };
+          saveTargetsByPortfolio(next).catch(() => {});
           return next;
         });
       }
       refresh();
     },
-    [refresh, updateAlerts],
+    [refresh, updateAlerts, updatePortfolios],
   );
 
   const cycleDisplayCurrency = useCallback(() => {
@@ -536,6 +664,27 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
     () => Object.fromEntries(Object.entries(corporateActions).map(([k, v]) => [k, v.actions])),
     [corporateActions],
   );
+  // Seçili görünümdeki işlemler ve hedefler
+  const transactions = useMemo(
+    () => filterByPortfolio(allTransactions, activePortfolio),
+    [allTransactions, activePortfolio],
+  );
+  const targets = useMemo(() => targetsByPortfolio[activePortfolio] ?? {}, [targetsByPortfolio, activePortfolio]);
+  const portfolioValues = useMemo(() => {
+    const out: Record<string, number> = {};
+    for (const p of portfolios) {
+      const h = computeHoldings(
+        filterByPortfolio(allTransactions, p.id),
+        quotes,
+        manualPrices,
+        fxHistory,
+        actionsByKey,
+      );
+      out[p.id] = computeSummary(h).totals[displayCurrency].value;
+    }
+    return out;
+  }, [portfolios, allTransactions, quotes, manualPrices, fxHistory, actionsByKey, displayCurrency]);
+
   const valueChart = useMemo(
     () =>
       buildValueChart({
@@ -606,6 +755,14 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
       addAlert,
       removeAlert,
       setAlertActive,
+      allTransactions,
+      portfolios,
+      activePortfolio,
+      setActivePortfolio,
+      addPortfolio,
+      renamePortfolio,
+      deletePortfolio,
+      portfolioValues,
     }),
     [
       manualPrices,
@@ -621,6 +778,14 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
       addAlert,
       removeAlert,
       setAlertActive,
+      allTransactions,
+      portfolios,
+      activePortfolio,
+      setActivePortfolio,
+      addPortfolio,
+      renamePortfolio,
+      deletePortfolio,
+      portfolioValues,
       displayCurrency,
       cycleDisplayCurrency,
       ready,

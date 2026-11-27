@@ -88,6 +88,11 @@ Expo (React Native) ile yazıldı. Geliştirmek ve App Store'a göndermek için 
 - **Fiyatlar:** Otomatik çekilir. Aşağı çekince ve uygulama öne gelince yenilenir.
 - **Kayıt:** Veriler yalnızca telefonda tutulur. Hesap ya da sunucu gerekmez.
 - **Yedekleme (Ayarlar → Yedekleme):** İşlemler ve elle girilen fiyatlar tek bir dosya olarak dışa aktarılır (telefonda paylaşma menüsü: Dosyalar'a/iCloud Drive'a kaydet, AirDrop, mesaj; web'de indirme). Yedekten geri yükleme mevcut işlemlerin yerine geçer; "Yedeği ekle" yalnız eksik işlemleri ekler.
+- **Birden fazla portföy (Ayarlar → Araçlar → Portföyler):** Hesapları ayrı tutmak için (ör. uzun vade, BES, çocuk hesabı). Portföy eklenir, adı değiştirilir, silinir (Ana portföy silinemez; silinen portföyün işlemleri de silinir).
+  - İki ya da daha fazla portföy olunca ana sayfanın üstünde "Tümü · Ana portföy · …" seçici çıkar. Halka, kâr/zarar, yıllık getiri, grafik, karşılaştırma ve widget seçili portföye (ya da hepsine birlikte) göre hesaplanır.
+  - Yeni işlemler seçili portföye eklenir ("Tümü"ndeyken Ana portföye); işlem ekleme ekranında portföy değiştirilebilir. Satışta eldeki miktar o portföye göre kontrol edilir. "Tümü" görünümünde varlık sayfasındaki işlemlerin yanında portföy adı yazar.
+  - Dengeleme hedef oranları portföy başına ayrı tutulur. Scriptable'dan aktarma seçili portföye yapılır ("Portföyün yerine koy" yalnız o portföyün işlemlerinin yerine geçer).
+  - Önceki sürümün verileri ve hedefleri kendiliğinden Ana portföye geçer. Portföyler yedeğe girer.
 - **Portföy dengeleme ("Ne alayım?"):** Kâr/zarar kartının altındaki düğmeden ya da Ayarlar → Araçlar'dan açılır. Her varlığa hedef oran girilir (hatırlanır, yedeğe de girer); "Şu anki oranları al" ve "Eşit dağıt" ile hızlı doldurulur.
   - Nakit ekle: satış yapmadan, eklenen nakitle hedefin en gerisindekiler alınır. Satış yapmadan tam hedefe ulaşmak için gereken tutar da yazar.
   - Dengele: hedefin üstündekiler satılır, gelirle altındakiler alınır.

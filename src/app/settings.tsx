@@ -11,7 +11,7 @@ import { confirmAsync, notify } from '@/lib/dialog';
 
 export default function SettingsScreen() {
   const c = useColors();
-  const { transactions, exportBackup, importBackup } = usePortfolio();
+  const { allTransactions: transactions, exportBackup, importBackup } = usePortfolio();
   const [busy, setBusy] = useState(false);
 
   const doExport = async () => {
@@ -66,6 +66,13 @@ export default function SettingsScreen() {
       <ScrollView style={{ backgroundColor: c.background }} contentContainerStyle={styles.content}>
         <Text style={[Type.overline, styles.section, { color: c.textSecondary }]}>ARAÇLAR</Text>
         <View style={[settingsStyles.card, { backgroundColor: c.card }]}>
+          <SettingsRow
+            icon={<LineIcon d={ICONS.folder} />}
+            color="#0EA5E9"
+            title="Portföyler"
+            subtitle="Hesaplarını ayrı tut (uzun vade, BES, çocuk hesabı…); ana sayfada aralarında geç"
+            onPress={() => router.push('/portfolios')}
+          />
           <SettingsRow
             icon={<LineIcon d={ICONS.scale} />}
             color="#7C5CFF"

@@ -19,6 +19,7 @@ import { AssetIcon, CategoryIcon } from '@/components/asset-icon';
 import { BenchmarkCard } from '@/components/benchmark-card';
 import { DonutChart } from '@/components/donut-chart';
 import { EmptyPortfolio } from '@/components/empty-portfolio';
+import { PortfolioSwitcher } from '@/components/portfolio-switcher';
 import { ValueChartCard } from '@/components/value-chart';
 import { DrawerButton } from '@/components/market-drawer';
 import { pnlColor, pnlSoft, Radius, Type, useColors } from '@/constants/theme';
@@ -178,6 +179,7 @@ export default function PortfolioScreen() {
         contentInsetAdjustmentBehavior="automatic"
         contentContainerStyle={styles.content}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />}>
+        {ready && <PortfolioSwitcher />}
         {!ready ? (
           <ActivityIndicator style={{ marginTop: 48 }} />
         ) : holdings.length === 0 ? (

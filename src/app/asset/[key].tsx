@@ -23,6 +23,7 @@ import {
 } from '@/lib/format';
 import { DISPLAY_CURRENCIES } from '@/lib/portfolio';
 import type { AssetKind, Currency, DisplayCurrency, Holding, Transaction } from '@/lib/types';
+import { ALL_PORTFOLIOS, portfolioOf } from '@/lib/portfolios';
 import { formatPeriod } from '@/lib/xirr';
 
 function confirm(title: string, message: string, onConfirm: () => void) {
@@ -39,7 +40,12 @@ function confirm(title: string, message: string, onConfirm: () => void) {
 export default function AssetScreen() {
   const c = useColors();
   const { key } = useLocalSearchParams<{ key: string }>();
-  const { holdings, deleteTransaction, setManualPrice } = usePortfolio();
+  const { holdings, deleteTransaction, setManualPrice, portfolios, activePortfolio } = usePortfolio();
+  // "Tümü" görünümünde işlemin hangi portföyde olduğu yazar
+  const portfolioName = (t: Transaction) =>
+    activePortfolio === ALL_PORTFOLIOS && portfolios.length > 1
+      ? portfolios.find((p) => p.id === portfolioOf(t))?.name
+      : undefined;
   const h = holdings.find((x) => x.key === key);
   const [editingPrice, setEditingPrice] = useState(false);
   const [priceInput, setPriceInput] = useState('');
@@ -192,6 +198,7 @@ export default function AssetScreen() {
             <TransactionRow
               key={t.id}
               tx={t}
+              portfolio={portfolioName(t)}
               currency={h.currency}
               kind={h.kind}
               last={i === arr.length - 1}
@@ -311,12 +318,14 @@ function CurrencyBreakdown({ holding: h }: { holding: Holding }) {
 
 function TransactionRow({
   tx,
+  portfolio,
   currency,
   kind,
   last,
   onDelete,
 }: {
   tx: Transaction;
+  portfolio?: string;
   currency: Currency;
   kind: AssetKind;
   last: boolean;
@@ -333,7 +342,10 @@ function TransactionRow({
         <Text style={[styles.txMain, { color: c.text }]}>
           {formatQuantity(tx.quantity)} × {formatAssetPrice(kind, tx.price, currency)}
         </Text>
-        <Text style={[styles.txSub, { color: c.textSecondary }]}>{formatTrDate(tx.date)}</Text>
+        <Text style={[styles.txSub, { color: c.textSecondary }]}>
+          {formatTrDate(tx.date)}
+          {portfolio ? ` · ${portfolio}` : ''}
+        </Text>
       </View>
       <Text style={[styles.txTotal, { color: c.text }]}>
         {formatMoney(tx.quantity * tx.price * priceFactor(kind), currency)}

@@ -33,6 +33,7 @@ import {
 } from '@/lib/format';
 import { stockInfo } from '@/lib/markets';
 import { heldQuantity, resolveAssetQuote } from '@/lib/portfolio';
+import { filterByPortfolio, targetPortfolio } from '@/lib/portfolios';
 import { fetchAnyQuotes } from '@/lib/prices';
 import type { AssetKind, TransactionSide } from '@/lib/types';
 
@@ -41,7 +42,9 @@ const SYMBOL_PATTERN = /^[A-Z0-9.\-_^=]{1,20}$/;
 export default function AddTransactionScreen() {
   const c = useColors();
   const params = useLocalSearchParams<{ kind?: string; symbol?: string; side?: string }>();
-  const { transactions, addTransaction, quotes, actionsByKey } = usePortfolio();
+  const { allTransactions, addTransaction, quotes, actionsByKey, portfolios, activePortfolio } = usePortfolio();
+  const [portfolioId, setPortfolioId] = useState(targetPortfolio(activePortfolio));
+  const transactions = useMemo(() => filterByPortfolio(allTransactions, portfolioId), [allTransactions, portfolioId]);
 
   const initialKind = ASSET_KINDS.some((k) => k.kind === params.kind) ? (params.kind as AssetKind) : 'bist';
   const lockedAsset = Boolean(params.kind && params.symbol);
@@ -125,7 +128,7 @@ export default function AddTransactionScreen() {
     if (side === 'sell' && qty > held + 1e-9) {
       return setError(held > 0 ? `En fazla ${formatQuantity(held)} satabilirsin.` : 'Elinde bu varlıktan yok.');
     }
-    addTransaction({ kind, symbol, side, quantity: qty, price: unitPrice, date: iso });
+    addTransaction({ kind, symbol, side, quantity: qty, price: unitPrice, date: iso, portfolioId });
     router.back();
   }
 
@@ -188,6 +191,16 @@ export default function AddTransactionScreen() {
                 {listed?.name ?? 'Bu kod listede yok; fiyatı alınabiliyorsa yine eklenir.'}
               </Text>
             )}
+          </Field>
+        )}
+
+        {portfolios.length > 1 && (
+          <Field label="Portföy">
+            <View style={styles.portfolioChips}>
+              {portfolios.map((p) => (
+                <Chip key={p.id} label={p.name} selected={portfolioId === p.id} onPress={() => setPortfolioId(p.id)} />
+              ))}
+            </View>
           </Field>
         )}
 
@@ -292,6 +305,7 @@ function Field({ label, right, children }: { label: string; right?: ReactNode; c
 }
 
 const styles = StyleSheet.create({
+  portfolioChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   content: {
     padding: 16,
     gap: 16,
