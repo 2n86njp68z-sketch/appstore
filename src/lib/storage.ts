@@ -13,6 +13,7 @@ const KEYS = {
   fxHistory: 'portfoy/fxHistory/v1',
   benchSeries: 'portfoy/benchSeries/v1',
   corporateActions: 'portfoy/corporateActions/v1',
+  targets: 'portfoy/targets/v1',
   displayCurrency: 'portfoy/displayCurrency/v1',
 } as const;
 
@@ -23,6 +24,8 @@ export interface StoredData {
   fxHistory: FxHistory;
   benchSeries: BenchSeries;
   corporateActions: StoredActions;
+  /** Dengeleme hedef oranları (varlık anahtarı → %). */
+  targets: Record<string, number>;
   displayCurrency: DisplayCurrency;
 }
 
@@ -36,7 +39,7 @@ async function readJson<T>(key: string, fallback: T): Promise<T> {
 }
 
 export async function loadAll(): Promise<StoredData> {
-  const [transactions, manualPrices, quotes, fxHistory, displayCurrency, benchSeries, corporateActions] =
+  const [transactions, manualPrices, quotes, fxHistory, displayCurrency, benchSeries, corporateActions, targets] =
     await Promise.all([
       readJson<Transaction[]>(KEYS.transactions, []),
       readJson<Record<string, number>>(KEYS.manualPrices, {}),
@@ -45,6 +48,7 @@ export async function loadAll(): Promise<StoredData> {
       readJson<DisplayCurrency>(KEYS.displayCurrency, 'TRY'),
       readJson<BenchSeries>(KEYS.benchSeries, {}),
       readJson<StoredActions>(KEYS.corporateActions, {}),
+      readJson<Record<string, number>>(KEYS.targets, {}),
     ]);
   return {
     transactions: Array.isArray(transactions) ? transactions : [],
@@ -53,6 +57,7 @@ export async function loadAll(): Promise<StoredData> {
     fxHistory,
     benchSeries,
     corporateActions,
+    targets,
     displayCurrency: ['TRY', 'USD', 'EUR'].includes(displayCurrency) ? displayCurrency : 'TRY',
   };
 }
@@ -83,4 +88,8 @@ export function saveBenchSeries(series: BenchSeries) {
 
 export function saveCorporateActions(actions: StoredActions) {
   return AsyncStorage.setItem(KEYS.corporateActions, JSON.stringify(actions));
+}
+
+export function saveTargets(targets: Record<string, number>) {
+  return AsyncStorage.setItem(KEYS.targets, JSON.stringify(targets));
 }

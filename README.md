@@ -68,6 +68,12 @@ Expo (React Native) ile yazıldı. Geliştirmek ve App Store'a göndermek için 
 - **Fiyatlar:** Otomatik çekilir. Aşağı çekince ve uygulama öne gelince yenilenir.
 - **Kayıt:** Veriler yalnızca telefonda tutulur. Hesap ya da sunucu gerekmez.
 - **Yedekleme (Ayarlar → Yedekleme):** İşlemler ve elle girilen fiyatlar tek bir dosya olarak dışa aktarılır (telefonda paylaşma menüsü: Dosyalar'a/iCloud Drive'a kaydet, AirDrop, mesaj; web'de indirme). Yedekten geri yükleme mevcut işlemlerin yerine geçer; "Yedeği ekle" yalnız eksik işlemleri ekler.
+- **Portföy dengeleme ("Ne alayım?"):** Kâr/zarar kartının altındaki düğmeden ya da Ayarlar → Araçlar'dan açılır. Her varlığa hedef oran girilir (hatırlanır, yedeğe de girer); "Şu anki oranları al" ve "Eşit dağıt" ile hızlı doldurulur.
+  - Nakit ekle: satış yapmadan, eklenen nakitle hedefin en gerisindekiler alınır. Satış yapmadan tam hedefe ulaşmak için gereken tutar da yazar.
+  - Dengele: hedefin üstündekiler satılır, gelirle altındakiler alınır.
+  - Nakit çek: istenen tutar, kalan portföy hedefe en yakın kalacak şekilde fazlası olanlardan satılır.
+  - Her varlık kendi alım biriminin katlarıyla önerilir (hisse/fon 1 lot, kripto 0,0001, gram altın 0,1 gr, eurobond 1.000 nominal). Her satırda işlem tutarı ve oranın önce → sonra (hedef) değeri yazar.
+  - "Bu işlemleri portföye ekle" ile öneriler güncel fiyattan bugünün tarihiyle işlem olarak eklenir.
 - **Görünüm:** Telefonun ayarına göre gündüz beyaz, gece siyah. Yazı tipi Manrope (₺ ve Türkçe harf destekli).
 
 ## Web sürümü (link)

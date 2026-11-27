@@ -74,6 +74,7 @@ export default function RootLayout() {
             <Stack.Screen name="add" options={{ title: 'İşlem Ekle', presentation: 'modal' }} />
             <Stack.Screen name="asset/[key]" options={{ title: '' }} />
             <Stack.Screen name="settings" options={{ title: 'Ayarlar' }} />
+            <Stack.Screen name="rebalance" options={{ title: 'Ne alayım?' }} />
           </Stack>
         </MarketDrawerProvider>
         <StatusBar style="auto" />

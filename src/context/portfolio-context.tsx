@@ -24,6 +24,7 @@ import {
   saveFxHistory,
   saveManualPrices,
   saveQuotes,
+  saveTargets,
   saveTransactions,
   type StoredActions,
 } from '@/lib/storage';
@@ -187,6 +188,9 @@ interface PortfolioContextValue {
   actionsByKey: Record<string, CorporateAction[]>;
   exportBackup: () => string;
   importBackup: (data: BackupData, mode: 'replace' | 'merge') => void;
+  /** Dengeleme hedef oranları (varlık anahtarı → %). */
+  targets: Record<string, number>;
+  setTargets: (targets: Record<string, number>) => void;
 }
 
 const PortfolioContext = createContext<PortfolioContextValue | null>(null);
@@ -206,6 +210,7 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
   const [fxHistory, setFxHistory] = useState<FxHistory>({});
   const [benchSeries, setBenchSeries] = useState<BenchSeries>({});
   const [corporateActions, setCorporateActions] = useState<StoredActions>({});
+  const [targets, setTargetsState] = useState<Record<string, number>>({});
   const actionsRef = useRef(corporateActions);
   useEffect(() => {
     actionsRef.current = corporateActions;
@@ -293,6 +298,7 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
       benchSeriesRef.current = data.benchSeries;
       setCorporateActions(data.corporateActions);
       actionsRef.current = data.corporateActions;
+      setTargetsState(data.targets);
       setDisplayCurrency(data.displayCurrency);
       const times = Object.values(data.quotes).map((q) => q.fetchedAt);
       if (times.length) setLastUpdated(Math.max(...times));
@@ -353,6 +359,12 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  /** Dengeleme hedef oranlarını kaydeder (varlık anahtarı → %). */
+  const setTargets = useCallback((next: Record<string, number>) => {
+    setTargetsState(next);
+    saveTargets(next).catch(() => {});
+  }, []);
+
   /** Yedek dosyasının içeriği (JSON). */
   const exportBackup = useCallback(
     () =>
@@ -360,8 +372,9 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
         transactions: transactionsRef.current,
         manualPrices,
         displayCurrency,
+        extra: { targets },
       }),
-    [manualPrices, displayCurrency],
+    [manualPrices, displayCurrency, targets],
   );
 
   /** Yedekten geri yükler: "replace" mevcut işlemlerin yerine koyar, "merge" eksik olanları ekler. */
@@ -380,6 +393,14 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
       if (mode === 'replace') {
         setDisplayCurrency(data.displayCurrency);
         saveDisplayCurrency(data.displayCurrency).catch(() => {});
+      }
+      const savedTargets = data.extra?.targets;
+      if (savedTargets && typeof savedTargets === 'object') {
+        setTargetsState((prev) => {
+          const next = mode === 'replace' ? (savedTargets as Record<string, number>) : { ...savedTargets, ...prev };
+          saveTargets(next).catch(() => {});
+          return next;
+        });
       }
       refresh();
     },
@@ -437,12 +458,16 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
       actionsByKey,
       exportBackup,
       importBackup,
+      targets,
+      setTargets,
     }),
     [
       manualPrices,
       actionsByKey,
       exportBackup,
       importBackup,
+      targets,
+      setTargets,
       displayCurrency,
       cycleDisplayCurrency,
       ready,

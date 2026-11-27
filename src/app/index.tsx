@@ -249,6 +249,29 @@ export default function PortfolioScreen() {
               />
             </View>
 
+            {!openCat && (
+              <Pressable
+                onPress={() => router.push('/rebalance')}
+                accessibilityRole="button"
+                style={({ pressed }) => [
+                  styles.actionPill,
+                  { backgroundColor: c.tintSoft, opacity: pressed ? 0.7 : 1 },
+                ]}>
+                <Svg width={16} height={16} viewBox="0 0 24 24">
+                  <Path
+                    d="M12 3v18M5 7h14M5 7l-3 7a3 3 0 0 0 6 0zM19 7l-3 7a3 3 0 0 0 6 0z"
+                    stroke={c.tint}
+                    strokeWidth={2}
+                    fill="none"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </Svg>
+                <Text style={[Type.bodyStrong, { color: c.tint, fontSize: 14 }]}>Ne alayım?</Text>
+                <Text style={[Type.subhead, { color: c.textSecondary, fontSize: 12 }]}>Hedef oranlarına göre</Text>
+              </Pressable>
+            )}
+
             {!openCat && <BenchmarkCard results={benchmarks} />}
 
             <View style={styles.listHeader}>
@@ -492,6 +515,16 @@ const styles = StyleSheet.create({
   },
   tabular: {
     fontVariant: ['tabular-nums'],
+  },
+  actionPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    alignSelf: 'flex-start',
+    borderRadius: Radius.pill,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    marginTop: 12,
   },
   headerButtons: {
     flexDirection: 'row',

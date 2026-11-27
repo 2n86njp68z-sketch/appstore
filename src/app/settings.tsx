@@ -1,4 +1,4 @@
-import { Stack } from 'expo-router';
+import { Stack, router } from 'expo-router';
 import { useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
@@ -64,6 +64,18 @@ export default function SettingsScreen() {
     <>
       <Stack.Screen options={{ title: 'Ayarlar' }} />
       <ScrollView style={{ backgroundColor: c.background }} contentContainerStyle={styles.content}>
+        <Text style={[Type.overline, styles.section, { color: c.textSecondary }]}>ARAÇLAR</Text>
+        <View style={[settingsStyles.card, { backgroundColor: c.card }]}>
+          <SettingsRow
+            icon={<LineIcon d={ICONS.scale} />}
+            color="#7C5CFF"
+            title="Portföy dengeleme (Ne alayım?)"
+            subtitle="Hedef oranlarına göre nakit ekle, dengele ya da nakit çek önerileri"
+            onPress={() => router.push('/rebalance')}
+            last
+          />
+        </View>
+
         <Text style={[Type.overline, styles.section, { color: c.textSecondary }]}>YEDEKLEME</Text>
         <View style={[settingsStyles.card, { backgroundColor: c.card }]}>
           <SettingsRow
