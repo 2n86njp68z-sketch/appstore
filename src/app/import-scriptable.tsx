@@ -144,6 +144,7 @@ export default function ImportScriptableScreen() {
                     value={withTargets}
                     onValueChange={setWithTargets}
                     trackColor={{ true: c.tint }}
+                    thumbColor="#FFFFFF"
                     accessibilityLabel="Hedef oranları da al"
                   />
                 </View>

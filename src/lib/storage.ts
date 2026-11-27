@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+import type { PriceAlert } from './alerts';
 import type { BenchSeries } from './benchmarks';
 import type { PriceHistory } from './history';
 import type { CorporateAction, DisplayCurrency, FxHistory, RawQuote, Transaction } from './types';
@@ -14,6 +15,7 @@ const KEYS = {
   fxHistory: 'portfoy/fxHistory/v1',
   benchSeries: 'portfoy/benchSeries/v1',
   priceHistory: 'portfoy/priceHistory/v1',
+  alerts: 'portfoy/alerts/v1',
   corporateActions: 'portfoy/corporateActions/v1',
   targets: 'portfoy/targets/v1',
   displayCurrency: 'portfoy/displayCurrency/v1',
@@ -26,6 +28,7 @@ export interface StoredData {
   fxHistory: FxHistory;
   benchSeries: BenchSeries;
   priceHistory: PriceHistory;
+  alerts: PriceAlert[];
   corporateActions: StoredActions;
   /** Dengeleme hedef oranları (varlık anahtarı → %). */
   targets: Record<string, number>;
@@ -52,6 +55,7 @@ export async function loadAll(): Promise<StoredData> {
     corporateActions,
     targets,
     priceHistory,
+    alerts,
   ] = await Promise.all([
     readJson<Transaction[]>(KEYS.transactions, []),
     readJson<Record<string, number>>(KEYS.manualPrices, {}),
@@ -62,6 +66,7 @@ export async function loadAll(): Promise<StoredData> {
     readJson<StoredActions>(KEYS.corporateActions, {}),
     readJson<Record<string, number>>(KEYS.targets, {}),
     readJson<PriceHistory>(KEYS.priceHistory, {}),
+    readJson<PriceAlert[]>(KEYS.alerts, []),
   ]);
   return {
     transactions: Array.isArray(transactions) ? transactions : [],
@@ -70,6 +75,7 @@ export async function loadAll(): Promise<StoredData> {
     fxHistory,
     benchSeries,
     priceHistory,
+    alerts: Array.isArray(alerts) ? alerts : [],
     corporateActions,
     targets,
     displayCurrency: ['TRY', 'USD', 'EUR'].includes(displayCurrency) ? displayCurrency : 'TRY',
@@ -110,4 +116,17 @@ export function saveTargets(targets: Record<string, number>) {
 
 export function savePriceHistory(history: PriceHistory) {
   return AsyncStorage.setItem(KEYS.priceHistory, JSON.stringify(history));
+}
+
+export function saveAlerts(alerts: PriceAlert[]) {
+  return AsyncStorage.setItem(KEYS.alerts, JSON.stringify(alerts));
+}
+
+/** Arka plan görevi için: alarmlar ve elle girilen fiyatlar. */
+export async function loadAlertData(): Promise<{ alerts: PriceAlert[]; manualPrices: Record<string, number> }> {
+  const [alerts, manualPrices] = await Promise.all([
+    readJson<PriceAlert[]>(KEYS.alerts, []),
+    readJson<Record<string, number>>(KEYS.manualPrices, {}),
+  ]);
+  return { alerts: Array.isArray(alerts) ? alerts : [], manualPrices };
 }

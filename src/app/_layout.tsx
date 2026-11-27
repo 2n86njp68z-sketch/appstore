@@ -15,6 +15,8 @@ import { GeniusLogo } from '@/components/genius-logo';
 import { MarketDrawerProvider } from '@/components/market-drawer';
 import { Colors, Font } from '@/constants/theme';
 import { PortfolioProvider } from '@/context/portfolio-context';
+// Fiyat alarmı arka plan görevi uygulama açılırken tanımlanmalı
+import '@/lib/alert-task';
 
 // Yazı tipi yüklenene kadar açılış ekranı kalsın.
 SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -76,6 +78,7 @@ export default function RootLayout() {
             <Stack.Screen name="settings" options={{ title: 'Ayarlar' }} />
             <Stack.Screen name="rebalance" options={{ title: 'Ne alayım?' }} />
             <Stack.Screen name="import-scriptable" options={{ title: "Scriptable'dan aktar" }} />
+            <Stack.Screen name="alerts" options={{ title: 'Fiyat alarmları' }} />
           </Stack>
         </MarketDrawerProvider>
         <StatusBar style="auto" />

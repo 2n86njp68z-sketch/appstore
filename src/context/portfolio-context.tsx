@@ -4,6 +4,8 @@ import { AppState, Platform } from 'react-native';
 import { assetKey, isManualPriced, quoteSymbolFor } from '@/lib/assets';
 import { makeBackup, mergeTransactions, type BackupData } from '@/lib/backup';
 import { BENCH_SYMBOLS, computeBenchmarks, type BenchmarkResult, type BenchSeries } from '@/lib/benchmarks';
+import { sendAlertNotifications, syncAlertTask } from '@/lib/alert-task';
+import { alertQuoteSymbols, checkAlerts, markFired, validAlerts, type PriceAlert } from '@/lib/alerts';
 import { todayIso } from '@/lib/format';
 import { refreshPriceHistory, type PriceHistory } from '@/lib/history';
 import { computeHoldings, computeSummary, DISPLAY_CURRENCIES, FxRates, requiredQuoteSymbols } from '@/lib/portfolio';
@@ -20,6 +22,7 @@ import {
 } from '@/lib/prices';
 import {
   loadAll,
+  saveAlerts,
   saveBenchSeries,
   saveCorporateActions,
   saveDisplayCurrency,
@@ -205,6 +208,11 @@ interface PortfolioContextValue {
   usdTryOn: (date: string) => number | undefined;
   /** Portföy değeri grafiği (seçili para biriminde); işlem yoksa null. */
   valueChart: ValueChart | null;
+  /** Fiyat alarmları. */
+  alerts: PriceAlert[];
+  addAlert: (a: Pick<PriceAlert, 'kind' | 'symbol' | 'op' | 'price'>) => void;
+  removeAlert: (id: string) => void;
+  setAlertActive: (id: string, active: boolean) => void;
 }
 
 const PortfolioContext = createContext<PortfolioContextValue | null>(null);
@@ -226,6 +234,9 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
   const [corporateActions, setCorporateActions] = useState<StoredActions>({});
   const [targets, setTargetsState] = useState<Record<string, number>>({});
   const [priceHistory, setPriceHistory] = useState<PriceHistory>({});
+  const [alerts, setAlertsState] = useState<PriceAlert[]>([]);
+  const alertsRef = useRef(alerts);
+  const manualPricesRef = useRef<Record<string, number>>({});
   const priceHistoryRef = useRef(priceHistory);
   const actionsRef = useRef(corporateActions);
   useEffect(() => {
@@ -245,6 +256,9 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
     benchSeriesRef.current = benchSeries;
   }, [benchSeries]);
   useEffect(() => {
+    manualPricesRef.current = manualPrices;
+  }, [manualPrices]);
+  useEffect(() => {
     transactionsRef.current = transactions;
   }, [transactions]);
   useEffect(() => {
@@ -258,8 +272,24 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
       try {
         const own = requiredQuoteSymbols(transactionsRef.current);
         // Karşılaştırma ölçütlerinin güncel değerleri de aynı toplu istekte.
-        const symbols = transactionsRef.current.length ? [...own, ...Object.values(BENCH_SYMBOLS)] : own;
+        const symbols = [
+          ...new Set([
+            ...own,
+            ...(transactionsRef.current.length ? Object.values(BENCH_SYMBOLS) : []),
+            ...(alertsRef.current.some((a) => a.active) ? alertQuoteSymbols(alertsRef.current) : []),
+          ]),
+        ];
         const fresh = await fetchAnyQuotes(symbols);
+        // Fiyat alarmları: yalnız yeni gelen fiyatlarla (eski fiyat alarm çaldırmasın)
+        const fired = checkAlerts(alertsRef.current, fresh, manualPricesRef.current);
+        if (fired.length) {
+          const next = markFired(alertsRef.current, fired);
+          alertsRef.current = next;
+          setAlertsState(next);
+          saveAlerts(next).catch(() => {});
+          syncAlertTask(next).catch(() => {});
+          sendAlertNotifications(fired).catch(() => {});
+        }
         const failed = own.filter((sym) => !fresh[sym]).map((sym) => sym.replace(/^CG:/, ''));
         const gotAny = Object.keys(fresh).length > 0;
         setQuotes((prev) => {
@@ -328,6 +358,10 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
       setCorporateActions(data.corporateActions);
       actionsRef.current = data.corporateActions;
       setTargetsState(data.targets);
+      setAlertsState(data.alerts);
+      alertsRef.current = data.alerts;
+      manualPricesRef.current = data.manualPrices;
+      syncAlertTask(data.alerts).catch(() => {});
       setPriceHistory(data.priceHistory);
       priceHistoryRef.current = data.priceHistory;
       setDisplayCurrency(data.displayCurrency);
@@ -396,6 +430,32 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
     saveTargets(next).catch(() => {});
   }, []);
 
+  const updateAlerts = useCallback((next: PriceAlert[]) => {
+    alertsRef.current = next;
+    setAlertsState(next);
+    saveAlerts(next).catch(() => {});
+    syncAlertTask(next).catch(() => {});
+  }, []);
+
+  const addAlert = useCallback(
+    (a: Pick<PriceAlert, 'kind' | 'symbol' | 'op' | 'price'>) =>
+      updateAlerts([...alertsRef.current, { ...a, id: newId(), createdAt: Date.now(), active: true }]),
+    [updateAlerts],
+  );
+  const removeAlert = useCallback(
+    (id: string) => updateAlerts(alertsRef.current.filter((a) => a.id !== id)),
+    [updateAlerts],
+  );
+  const setAlertActive = useCallback(
+    (id: string, active: boolean) =>
+      updateAlerts(
+        alertsRef.current.map((a) =>
+          a.id === id ? { ...a, active, ...(active ? { triggeredAt: undefined, triggeredPrice: undefined } : {}) } : a,
+        ),
+      ),
+    [updateAlerts],
+  );
+
   /** Yedek dosyasının içeriği (JSON). */
   const exportBackup = useCallback(
     () =>
@@ -403,7 +463,7 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
         transactions: transactionsRef.current,
         manualPrices,
         displayCurrency,
-        extra: { targets },
+        extra: { targets, alerts: alertsRef.current },
       }),
     [manualPrices, displayCurrency, targets],
   );
@@ -442,6 +502,13 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
         setDisplayCurrency(data.displayCurrency);
         saveDisplayCurrency(data.displayCurrency).catch(() => {});
       }
+      const savedAlerts = validAlerts(data.extra?.alerts);
+      if (savedAlerts.length) {
+        const ids = new Set(alertsRef.current.map((a) => a.id));
+        updateAlerts(
+          mode === 'replace' ? savedAlerts : [...alertsRef.current, ...savedAlerts.filter((a) => !ids.has(a.id))],
+        );
+      }
       const savedTargets = data.extra?.targets;
       if (savedTargets && typeof savedTargets === 'object') {
         setTargetsState((prev) => {
@@ -452,7 +519,7 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
       }
       refresh();
     },
-    [refresh],
+    [refresh, updateAlerts],
   );
 
   const cycleDisplayCurrency = useCallback(() => {
@@ -527,6 +594,10 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
       importTransactions,
       usdTryOn,
       valueChart,
+      alerts,
+      addAlert,
+      removeAlert,
+      setAlertActive,
     }),
     [
       manualPrices,
@@ -538,6 +609,10 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
       importTransactions,
       usdTryOn,
       valueChart,
+      alerts,
+      addAlert,
+      removeAlert,
+      setAlertActive,
       displayCurrency,
       cycleDisplayCurrency,
       ready,

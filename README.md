@@ -51,6 +51,12 @@ Expo (React Native) ile yazıldı. Geliştirmek ve App Store'a göndermek için 
   - Geçmişi olmayanlar (eurobond, elle fiyatlananlar, CoinGecko'nun 365 günü öncesi) son işlem fiyatıyla çizilir; kartın altında hangileri olduğu yazar. Alınan nakit temettüler çizgiye dahil değildir.
   - Renkler renk körlüğü denetiminden geçmiş kategorik paletten; her çizginin değeri lejantta yazılı olduğu için renge bağlı kalmaz.
   - Web sürümünde tarayıcı Yahoo ve TEFAS'a erişemediği için hisse ve fonlar işlem fiyatlarıyla çizilir (kripto ve ölçütler tam); grafik telefonda tam görünür.
+- **Fiyat alarmları:** Varlık sayfasındaki "Fiyat alarmı" bölümünden ("+ Alarm kur") ya da Ayarlar → Araçlar → Fiyat alarmları'ndan.
+  - "Üstüne çıkınca" ya da "Altına inince" ve seviye (varlığın kendi para biriminde; eurobondda 100 nominal başına). Öneri olarak şu anki fiyatın %5 üstü gelir; fiyat zaten seviyenin ötesindeyse uyarır.
+  - Fiyat seviyeye gelince bir kez bildirim gelir ve alarm kapanır ("Çaldı: tarih · fiyat"); anahtarla yeniden açılabilir, çöp kutusuyla silinir. Listede şu anki fiyat ve seviyeye uzaklık yazar.
+  - Uygulama açıkken her fiyat yenilemesinde kontrol edilir (yalnız yeni gelen fiyatlarla). Kapalıyken arka plan görevi (expo-background-task) fiyatları çekip kontrol eder; ne zaman çalışacağına telefon karar verir (en az 15 dakikada bir, iPhone'da çoğu zaman daha seyrek), yani anlık değildir. Arka plan görevi geliştirme/App Store derlemesinde çalışır; Expo Go'da alarmlar uygulama açıkken kontrol edilir.
+  - İlk alarmda bildirim izni istenir; reddedildiyse alarmlar ekranından Ayarlar'a gidilir. Web sürümünde bildirim yok, alarm sayfa açıkken uyarı olarak çıkar.
+  - Alarmlar yedeğe girer.
 - **Yıllık getiri (XIRR):** Her alış, satış ve temettü kendi tarihiyle hesaba girer; bugünkü değer bugünkü akış sayılır. Çıkan oran mevduat faizi gibi yıllık oranlarla kıyaslanabilir.
   - Ana sayfadaki "Yıllık" hücresi portföyün tamamı içindir (satılıp kapanan varlıklar dahil); dokununca açıklaması çıkar. Seçili para biriminde (TL, dolar, euro) hesaplanır.
   - Varlık detayında "Para birimine göre" kartında her para birimi için ayrı yazar.

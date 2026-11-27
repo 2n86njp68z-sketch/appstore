@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { Alert, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { AssetIcon } from '@/components/asset-icon';
+import { AssetAlerts } from '@/components/price-alerts';
 import { Card, PrimaryButton, SectionTitle, StatRow } from '@/components/ui';
 import { Font, pnlColor, useColors } from '@/constants/theme';
 import { usePortfolio } from '@/context/portfolio-context';
@@ -166,6 +167,8 @@ export default function AssetScreen() {
         </Card>
 
         {h.quantity > 0 && <CurrencyBreakdown holding={h} />}
+
+        <AssetAlerts kind={h.kind} symbol={h.symbol} price={h.priceMissing ? undefined : h.price} />
 
         <CorporateEvents holding={h} />
 

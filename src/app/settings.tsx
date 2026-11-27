@@ -74,6 +74,13 @@ export default function SettingsScreen() {
             onPress={() => router.push('/rebalance')}
           />
           <SettingsRow
+            icon={<LineIcon d={ICONS.bell} />}
+            color="#EF4444"
+            title="Fiyat alarmları"
+            subtitle="Fiyat belirlediğin seviyenin üstüne çıkınca ya da altına inince bildirim"
+            onPress={() => router.push('/alerts')}
+          />
+          <SettingsRow
             icon={<LineIcon d={ICONS.import} />}
             color="#F59E0B"
             title="Scriptable'dan aktar"
