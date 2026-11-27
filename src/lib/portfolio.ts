@@ -7,6 +7,7 @@ import {
   FX_RATE_SYMBOL,
   fixedName,
   isManualPriced,
+  isTryCash,
   priceFactor,
   quoteSymbolFor,
   TROY_OUNCE_GRAMS,
@@ -95,6 +96,8 @@ export function resolveAssetQuote(
   raw: Record<string, RawQuote>,
   manualPrices: Record<string, number>,
 ): AssetQuote | undefined {
+  // Türk lirası nakit: 1 TL = 1 TL
+  if (isTryCash(kind, symbol)) return { price: 1, previousClose: 1 };
   if (isManualPriced(kind)) {
     const p = manualPrices[assetKey(kind, symbol)];
     return p != null && Number.isFinite(p) ? { price: p, manual: true } : undefined;

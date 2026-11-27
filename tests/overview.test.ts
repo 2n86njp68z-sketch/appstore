@@ -3,39 +3,28 @@ import { test } from 'node:test';
 
 import { COMPARE_LINKS, OVERVIEW, OVERVIEW_KEYS, searchLinks, searchOverview } from '../src/lib/overview';
 
-test('menüdeki Endeks ve Kurlar bölümleri', () => {
-  assert.deepEqual(OVERVIEW_KEYS, ['index', 'rates']);
+test('menüdeki Nakit bölümü: Türk lirası, dolar, euro (Endeks bölümü yok)', () => {
+  assert.deepEqual(OVERVIEW_KEYS, ['cash']);
+  assert.equal(OVERVIEW.cash.title, 'Nakit');
   assert.deepEqual(
-    OVERVIEW.index.items.map((i) => [i.code, i.quoteKey]),
+    OVERVIEW.cash.items.map((i) => [i.code, i.quoteKey, i.asset?.kind, i.asset?.symbol, i.fixedPrice]),
     [
-      ['S&P 500', '^GSPC'],
-      ['Nasdaq 100', '^NDX'],
-      ['BIST 100', 'XU100.IS'],
-    ],
-  );
-  assert.ok(
-    OVERVIEW.index.items.every((i) => i.currency === null && !i.asset),
-    'endeksler puan, eklenemez',
-  );
-  assert.deepEqual(
-    OVERVIEW.rates.items.map((i) => [i.code, i.quoteKey, i.asset?.symbol]),
-    [
-      ['Dolar', 'USDTRY=X', 'USD'],
-      ['Euro', 'EURTRY=X', 'EUR'],
+      ['Türk Lirası', 'TRY', 'fx', 'TRY', 1],
+      ['Dolar', 'USDTRY=X', 'fx', 'USD', undefined],
+      ['Euro', 'EURTRY=X', 'fx', 'EUR', undefined],
     ],
   );
 });
 
-test('endeks ve kur araması', () => {
-  const codes = (q: string, k: 'index' | 'rates') => searchOverview(q, OVERVIEW[k].items).map((i) => i.code);
-  assert.deepEqual(codes('nasdaq', 'index'), ['Nasdaq 100']);
-  assert.deepEqual(codes('BİST', 'index'), ['BIST 100']);
-  assert.deepEqual(codes('s&p', 'index'), ['S&P 500']);
-  assert.deepEqual(codes('dolar', 'rates'), ['Dolar']);
-  assert.deepEqual(codes('usd', 'rates'), ['Dolar']);
-  assert.deepEqual(codes('try', 'rates'), ['Dolar', 'Euro']);
-  assert.equal(searchOverview('', OVERVIEW.rates.items).length, 2);
-  assert.deepEqual(codes('altın', 'index'), []);
+test('nakit araması', () => {
+  const codes = (q: string) => searchOverview(q, OVERVIEW.cash.items).map((i) => i.code);
+  assert.deepEqual(codes('lira'), ['Türk Lirası']);
+  assert.deepEqual(codes('tl'), ['Türk Lirası']);
+  assert.deepEqual(codes('dolar'), ['Dolar']);
+  assert.deepEqual(codes('usd'), ['Dolar']);
+  assert.deepEqual(codes('try'), ['Dolar', 'Euro']);
+  assert.equal(searchOverview('', OVERVIEW.cash.items).length, 3);
+  assert.deepEqual(codes('nasdaq'), []);
 });
 
 test('Karşılaştır bölümü: Grafik sitesi', () => {

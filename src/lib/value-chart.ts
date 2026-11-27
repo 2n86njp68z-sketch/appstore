@@ -1,4 +1,4 @@
-import { assetCurrency, assetKey, commodityInfo, priceFactor, TROY_OUNCE_GRAMS } from './assets';
+import { assetCurrency, assetKey, commodityInfo, isTryCash, priceFactor, TROY_OUNCE_GRAMS } from './assets';
 import { BENCH_SYMBOLS, type BenchKey, type BenchSeries, txAmountTry } from './benchmarks';
 import { applySplits } from './corporate';
 import { historySymbolFor, type PriceHistory } from './history';
@@ -142,7 +142,7 @@ export function buildValueChart(input: {
     const series = hs ? priceHistory[hs] : undefined;
     const metal = kind === 'metal' ? commodityInfo(symbol) : undefined;
     const current = resolveAssetQuote(kind, symbol, raw, manualPrices)?.price;
-    if (!series && kind !== 'other') approximated.push(symbol);
+    if (!series && kind !== 'other' && !isTryCash(kind, symbol)) approximated.push(symbol);
     let qty = 0;
     let lastTxPrice = txs[0].price;
     let p = 0;

@@ -240,3 +240,29 @@ test('geçmiş kurun son gününden yeni işlemler güncel kurla çevrilir', () 
   const h = computeHoldings(txs, raw, {}, history)[0];
   close(h.views.USD!.cost, 3000 / 40);
 });
+
+test('Türk lirası nakit: fiyat 1 ₺, kaynaktan istenmez, değişim yok', async () => {
+  const { computeHoldings: ch, requiredQuoteSymbols: rq, resolveAssetQuote: rs } = await import('../src/lib/portfolio');
+  const { displaySymbol, quantityLabelFor, quoteSymbolFor } = await import('../src/lib/assets');
+  const t = {
+    id: 'try1',
+    kind: 'fx' as const,
+    symbol: 'TRY',
+    side: 'buy' as const,
+    quantity: 25000,
+    price: 1,
+    date: '2026-01-02',
+    createdAt: 1,
+  };
+  assert.equal(quoteSymbolFor('fx', 'TRY'), null);
+  assert.deepEqual(rq([t]).sort(), ['EURTRY=X', 'USDTRY=X']);
+  assert.deepEqual(rs('fx', 'TRY', {}, {}), { price: 1, previousClose: 1 });
+  assert.equal(displaySymbol('fx', 'TRY'), 'TL');
+  assert.equal(quantityLabelFor('fx', 'TRY'), 'Tutar (₺)');
+  const [h] = ch([t], { 'USDTRY=X': { price: 40, fetchedAt: 1 }, 'EURTRY=X': { price: 45, fetchedAt: 1 } }, {});
+  assert.equal(h.name, 'Türk Lirası');
+  assert.equal(h.views.TRY!.value, 25000);
+  assert.equal(h.views.TRY!.pnl, 0);
+  assert.equal(h.dayChange, 0);
+  assert.equal(h.views.USD!.value, 25000 / 40);
+});

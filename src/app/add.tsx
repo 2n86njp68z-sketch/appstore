@@ -14,6 +14,7 @@ import {
   commodityInfo,
   displaySymbol,
   isManualPriced,
+  isTryCash,
   kindInfo,
   normalizeSymbol,
   priceFactor,
@@ -75,7 +76,9 @@ export default function AddTransactionScreen() {
   const commodity = kind === 'metal' ? commodityInfo(symbol) : undefined;
 
   const qty = parseDecimal(quantity);
-  const unitPrice = parseDecimal(price);
+  // Türk lirası nakitte fiyat her zaman 1 ₺
+  const tryCash = isTryCash(kind, symbol);
+  const unitPrice = tryCash ? 1 : parseDecimal(price);
   // Eurobondlarda fiyat 100 nominal başına
   const total = qty > 0 && unitPrice > 0 ? qty * unitPrice * priceFactor(kind) : undefined;
 
@@ -103,7 +106,7 @@ export default function AddTransactionScreen() {
 
   // Menüden bir hisse seçilerek gelindiyse güncel fiyatı kendiliğinden doldur.
   useEffect(() => {
-    if (!lockedAsset || isManualPriced(kind)) return;
+    if (!lockedAsset || isManualPriced(kind) || isTryCash(kind, symbol)) return;
     const t = setTimeout(fillCurrentPrice, 0);
     return () => clearTimeout(t);
     // Yalnız ilk açılışta.
@@ -229,37 +232,39 @@ export default function AddTransactionScreen() {
           />
         </Field>
 
-        <Field
-          label={
-            kind === 'eurobond'
-              ? `Fiyat (100 nominal, ${currencySymbol(currency)})`
-              : `Birim fiyat (${currencySymbol(currency)})`
-          }
-          right={
-            !manual ? (
-              <Pressable onPress={fillCurrentPrice} disabled={fetchingPrice} hitSlop={8}>
-                {fetchingPrice ? (
-                  <ActivityIndicator size="small" />
-                ) : (
-                  <Text style={[styles.link, { color: c.link }]}>Güncel fiyatı kullan</Text>
-                )}
-              </Pressable>
-            ) : undefined
-          }>
-          <TextInput
-            value={price}
-            onChangeText={setPrice}
-            placeholder="0,00"
-            placeholderTextColor={c.textTertiary}
-            keyboardType="decimal-pad"
-            style={inputStyle}
-          />
-          {(kind === 'fund' || kind === 'bes') && (
-            <Text style={[styles.hint, { color: c.textTertiary }]}>
-              {"Fon fiyatları TEFAS'tan her gün otomatik gelir. Alış fiyatını, aldığın günün fon fiyatı olarak gir."}
-            </Text>
-          )}
-        </Field>
+        {!tryCash && (
+          <Field
+            label={
+              kind === 'eurobond'
+                ? `Fiyat (100 nominal, ${currencySymbol(currency)})`
+                : `Birim fiyat (${currencySymbol(currency)})`
+            }
+            right={
+              !manual ? (
+                <Pressable onPress={fillCurrentPrice} disabled={fetchingPrice} hitSlop={8}>
+                  {fetchingPrice ? (
+                    <ActivityIndicator size="small" />
+                  ) : (
+                    <Text style={[styles.link, { color: c.link }]}>Güncel fiyatı kullan</Text>
+                  )}
+                </Pressable>
+              ) : undefined
+            }>
+            <TextInput
+              value={price}
+              onChangeText={setPrice}
+              placeholder="0,00"
+              placeholderTextColor={c.textTertiary}
+              keyboardType="decimal-pad"
+              style={inputStyle}
+            />
+            {(kind === 'fund' || kind === 'bes') && (
+              <Text style={[styles.hint, { color: c.textTertiary }]}>
+                {"Fon fiyatları TEFAS'tan her gün otomatik gelir. Alış fiyatını, aldığın günün fon fiyatı olarak gir."}
+              </Text>
+            )}
+          </Field>
+        )}
 
         <Field label="Tarih (GG.AA.YYYY)">
           <TextInput

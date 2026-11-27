@@ -2,19 +2,21 @@ import { foldForSearch } from './markets';
 import type { AssetKind, Currency } from './types';
 
 /**
- * Sol menüdeki piyasa özeti bölümleri: endeksler ve kurlar. Bunlar portföy kalemi değil, yalnız
- * fiyatları izlenir (dövizlere dokununca portföye döviz olarak eklenebilir).
+ * Sol menüdeki "Nakit" bölümü: Türk lirası, dolar ve euro. Dokununca portföye nakit olarak eklenir
+ * (Türk lirasının fiyatı her zaman 1 ₺; döviz kurları Yahoo'dan).
  */
-export type OverviewKey = 'index' | 'rates';
+export type OverviewKey = 'cash';
 
 export interface OverviewItem {
   /** Satırda kalın yazan ad. */
   code: string;
   /** Altındaki açıklama. */
   name: string;
-  /** Yahoo Finance sembolü. */
+  /** Yahoo Finance sembolü; sabit fiyatlılarda (Türk lirası) kaynak yok. */
   quoteKey: string;
-  /** Fiyatın para birimi; endekslerde puan (null). */
+  /** Kaynaktan çekilmeyen sabit fiyat (Türk lirası: 1). */
+  fixedPrice?: number;
+  /** Fiyatın para birimi. */
   currency: Currency | null;
   icon: { flag: 'TR' | 'USD' } | { pair: [string, string] };
   /** Dokununca portföye eklenecek varlık. */
@@ -22,35 +24,18 @@ export interface OverviewItem {
 }
 
 export const OVERVIEW: Record<OverviewKey, { title: string; items: readonly OverviewItem[] }> = {
-  index: {
-    title: 'Endeks',
+  cash: {
+    title: 'Nakit',
     items: [
       {
-        code: 'S&P 500',
-        name: "ABD'nin 500 büyük şirketi",
-        quoteKey: '^GSPC',
-        currency: null,
-        icon: { flag: 'USD' },
-      },
-      {
-        code: 'Nasdaq 100',
-        name: "Nasdaq'ın 100 büyük şirketi",
-        quoteKey: '^NDX',
-        currency: null,
-        icon: { flag: 'USD' },
-      },
-      {
-        code: 'BIST 100',
-        name: "Borsa İstanbul'un 100 büyük şirketi",
-        quoteKey: 'XU100.IS',
-        currency: null,
+        code: 'Türk Lirası',
+        name: 'TL nakit',
+        quoteKey: 'TRY',
+        fixedPrice: 1,
+        currency: 'TRY',
         icon: { flag: 'TR' },
+        asset: { kind: 'fx', symbol: 'TRY' },
       },
-    ],
-  },
-  rates: {
-    title: 'Kurlar',
-    items: [
       {
         code: 'Dolar',
         name: 'USD/TRY',
@@ -73,7 +58,7 @@ export const OVERVIEW: Record<OverviewKey, { title: string; items: readonly Over
 
 export const OVERVIEW_KEYS = Object.keys(OVERVIEW) as OverviewKey[];
 
-/** Ad ya da açıklamada geçen kalemler ("nasdaq", "dolar", "usd"). */
+/** Ad ya da açıklamada geçen kalemler ("lira", "dolar", "usd"). */
 export function searchOverview(query: string, items: readonly OverviewItem[]): OverviewItem[] {
   const q = foldForSearch(query);
   if (!q) return [...items];

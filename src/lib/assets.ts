@@ -56,7 +56,7 @@ export const ASSET_KINDS: AssetKindInfo[] = [
     placeholder: 'BTC',
     color: '#FF8A3D',
   },
-  { kind: 'fx', label: 'Döviz', shortLabel: 'Döviz', currency: 'TRY', quantityLabel: 'Miktar', color: '#14B8A6' },
+  { kind: 'fx', label: 'Nakit', shortLabel: 'Nakit', currency: 'TRY', quantityLabel: 'Miktar', color: '#14B8A6' },
   {
     kind: 'metal',
     label: 'Emtia',
@@ -148,7 +148,12 @@ export interface FixedOption {
   name: string;
 }
 
+/** Türk lirası nakit: fiyatı her zaman 1 ₺ (kaynaktan çekilmez). */
+export const TRY_CASH = 'TRY';
+export const isTryCash = (kind: AssetKind, symbol: string) => kind === 'fx' && symbol === TRY_CASH;
+
 export const FX_OPTIONS: FixedOption[] = [
+  { symbol: TRY_CASH, name: 'Türk Lirası' },
   { symbol: 'USD', name: 'Amerikan Doları' },
   { symbol: 'EUR', name: 'Euro' },
   { symbol: 'GBP', name: 'İngiliz Sterlini' },
@@ -282,7 +287,7 @@ export function quoteSymbolFor(kind: AssetKind, symbol: string): string | null {
       return id ? `CG:${id}` : `${symbol}-USD`;
     }
     case 'fx':
-      return `${symbol}TRY=X`;
+      return symbol === TRY_CASH ? null : `${symbol}TRY=X`;
     case 'metal':
       return METAL_SOURCE[symbol] ?? null;
     // TEFAS fon servisi: yatırım fonları "YAT", emeklilik (BES) fonları "EMK"
@@ -303,11 +308,13 @@ export function fixedName(kind: AssetKind, symbol: string): string | undefined {
 export function displaySymbol(kind: AssetKind, symbol: string): string {
   if (kind === 'metal') return fixedName(kind, symbol) ?? symbol;
   if (kind === 'eurobond') return eurobondLabel(symbol);
+  if (isTryCash(kind, symbol)) return 'TL';
   return symbol;
 }
 
 /** Miktarın yanında gösterilecek birim: "BTC", "USD", "gram", "ons", "varil", "adet". */
 export function quantityUnit(kind: AssetKind, symbol: string): string {
+  if (isTryCash(kind, symbol)) return 'TL';
   if (kind === 'crypto' || kind === 'fx') return symbol;
   if (kind === 'metal') return commodityInfo(symbol)?.unit ?? 'gram';
   return kindInfo(kind).quantityLabel.toLocaleLowerCase('tr-TR');
@@ -319,5 +326,6 @@ export function quantityLabelFor(kind: AssetKind, symbol: string): string {
     const unit = commodityInfo(symbol)?.unit ?? 'gram';
     return unit.charAt(0).toLocaleUpperCase('tr-TR') + unit.slice(1);
   }
+  if (isTryCash(kind, symbol)) return 'Tutar (₺)';
   return kindInfo(kind).quantityLabel;
 }

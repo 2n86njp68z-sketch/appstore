@@ -33,7 +33,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle, Defs, Line, LinearGradient, Path, RadialGradient, Rect, Stop } from 'react-native-svg';
 
-import { AssetIcon, CategoryIcon, CompareMark, FlagIcon, IndexMark, PairIcon } from '@/components/asset-icon';
+import { AssetIcon, CategoryIcon, CompareMark, FlagIcon, PairIcon } from '@/components/asset-icon';
 import { CompanyLogo } from '@/components/company-logo';
 import { GeniusLogo } from '@/components/genius-logo';
 import { TrendIcon } from '@/components/trend-icon';
@@ -161,7 +161,7 @@ interface StockItem {
   stock: MarketStock;
 }
 
-/** Endeks ve kur satırı. */
+/** Nakit satırı (Türk lirası, dolar, euro). */
 interface OverviewRowItem {
   key: string;
   overview: OverviewItem;
@@ -220,8 +220,7 @@ type SectionDef = SectionLook &
   );
 
 const SECTION_DEFS: SectionDef[] = [
-  // En üstte Karşılaştır (herkes görsün); sonra Türk bayraklılar, ABD bayraklılar, emtia, kripto,
-  // endeksler ve kurlar.
+  // En üstte Karşılaştır (herkes görsün); sonra Türk bayraklılar, ABD bayraklılar, emtia, kripto ve nakit.
   {
     key: 'compare',
     title: COMPARE_LINKS.title,
@@ -303,20 +302,12 @@ const SECTION_DEFS: SectionDef[] = [
     subtitle: 'Bitcoin, Ethereum, Solana',
   },
   {
-    key: 'index',
-    title: OVERVIEW.index.title,
-    overview: 'index',
-    group: 'Piyasa özeti',
-    accent: '#4F46E5',
-    subtitle: 'S&P 500, Nasdaq, BIST 100',
-  },
-  {
-    key: 'rates',
-    title: OVERVIEW.rates.title,
-    overview: 'rates',
-    group: 'Piyasa özeti',
+    key: 'cash',
+    title: OVERVIEW.cash.title,
+    overview: 'cash',
+    group: 'Nakit ve döviz',
     accent: '#14B8A6',
-    subtitle: 'Dolar ve Euro',
+    subtitle: 'Türk lirası, dolar ve euro',
   },
 ];
 
@@ -384,8 +375,8 @@ const LINK_ROWS: ListItem[] = [
   ...COMPARE_LINKS.items.map((link) => ({ key: `link:${link.url}`, link })),
 ];
 
-function overviewIcon(key: OverviewKey, size: number) {
-  return key === 'index' ? <IndexMark size={size} /> : <CategoryIcon kind="fx" size={size} />;
+function overviewIcon(_key: OverviewKey, size: number) {
+  return <CategoryIcon kind="fx" size={size} />;
 }
 
 /** Her piyasanın satır nesneleri bir kez oluşturulur (arama sonuçları da aynı nesneleri kullanır). */
@@ -482,8 +473,7 @@ function MarketDrawer({ open, onClose }: { open: boolean; onClose: () => void })
     () =>
       searching
         ? {
-            index: searchOverview(query, OVERVIEW.index.items),
-            rates: searchOverview(query, OVERVIEW.rates.items),
+            cash: searchOverview(query, OVERVIEW.cash.items),
           }
         : null,
     [query, searching],
@@ -493,8 +483,7 @@ function MarketDrawer({ open, onClose }: { open: boolean; onClose: () => void })
     results != null &&
     MARKET_KEYS.every((m) => results[m].length === 0) &&
     overviewResults != null &&
-    overviewResults.index.length === 0 &&
-    overviewResults.rates.length === 0 &&
+    overviewResults.cash.length === 0 &&
     linkResults != null &&
     linkResults.length === 0;
 
@@ -566,8 +555,9 @@ function MarketDrawer({ open, onClose }: { open: boolean; onClose: () => void })
     for (const v of viewableItems) {
       // Bölüm başlıklarının kaydında satır yerine bölüm nesnesi gelir: yalnız satırlar alınır.
       const item = v.item as Partial<StockItem & OverviewRowItem> | undefined;
-      if (item?.overview) symbols.push(item.overview.quoteKey);
-      else if (item?.stock && item.market) symbols.push(...MARKETS[item.market].quoteKeys(item.stock.code));
+      if (item?.overview) {
+        if (item.overview.fixedPrice == null) symbols.push(item.overview.quoteKey);
+      } else if (item?.stock && item.market) symbols.push(...MARKETS[item.market].quoteKeys(item.stock.code));
     }
     if (symbols.length) requestRef.current(symbols);
   }, []);
@@ -578,11 +568,11 @@ function MarketDrawer({ open, onClose }: { open: boolean; onClose: () => void })
     if (!open) return;
     const defs = results ? SECTION_DEFS : SECTION_DEFS.filter((d) => d.key === expanded);
     const symbols: string[] = [];
-    // Endeks ve kur bölümleri kısa: hepsi birden istenir.
+    // Nakit bölümü kısa: hepsi birden istenir.
     for (const d of defs) {
       if (d.overview) {
         const items = overviewResults ? overviewResults[d.overview] : OVERVIEW[d.overview].items;
-        symbols.push(...items.map((i) => i.quoteKey));
+        symbols.push(...items.filter((i) => i.fixedPrice == null).map((i) => i.quoteKey));
       }
     }
     const lists = defs.flatMap((d) =>
@@ -620,7 +610,7 @@ function MarketDrawer({ open, onClose }: { open: boolean; onClose: () => void })
     [onClose],
   );
 
-  // Dövizlere dokununca portföye eklenir; endeksler yalnız izlenir.
+  // Nakit kalemlerine dokununca portföye eklenir.
   const openOverview = useCallback(
     (o: OverviewItem) => {
       if (!o.asset) return;
@@ -739,7 +729,15 @@ function MarketDrawer({ open, onClose }: { open: boolean; onClose: () => void })
             if ('link' in item) return <LinkRow item={item.link} />;
             if ('overview' in item) {
               return (
-                <OverviewRow item={item.overview} quote={allQuotes[item.overview.quoteKey]} onPress={openOverview} />
+                <OverviewRow
+                  item={item.overview}
+                  quote={
+                    item.overview.fixedPrice != null
+                      ? { price: item.overview.fixedPrice, previousClose: item.overview.fixedPrice, fetchedAt: 0 }
+                      : allQuotes[item.overview.quoteKey]
+                  }
+                  onPress={openOverview}
+                />
               );
             }
             const def = MARKETS[item.market];

@@ -21,9 +21,9 @@ Expo (React Native) ile yazıldı. Geliştirmek ve App Store'a göndermek için 
   - Hisse ve kriptolarda dilim rengiyle harf rozeti.
 - **Piyasalar menüsü (sol üstteki ☰):**
   - En üstte arama çubuğu var. Kod ya da şirket adı yazdıkça sonuçlar anında süzülür, Türkçe harf farkı önemli değildir.
-  - Bölümler: en üstte Karşılaştır (altında Piyasa nabzı); Türk Market, TEFAS, BES, Eurobond; ABD Market, ABD ETF; Emtia, Kripto; Endeks, Kurlar.
+  - Bölümler: en üstte Karşılaştır (altında Piyasa nabzı); Türk Market, TEFAS, BES, Eurobond; ABD Market, ABD ETF; Emtia, Kripto; Nakit.
   - En üstte "Piyasa nabzı": BIST 100, S&P 500, Nasdaq 100, Dolar, Euro, Gram Altın ve Bitcoin yan yana kayar.
-  - Bölümler gruplar halinde (Türkiye, ABD, Emtia ve kripto, Piyasa özeti, Araçlar), her biri kendi renginde kart.
+  - Bölümler gruplar halinde (Araçlar, Türkiye, ABD, Emtia ve kripto, Nakit ve döviz), her biri kendi renginde kart.
   - Bölüme dokununca kalemler alt alta kutucuklar halinde açılır. Aynı anda tek bölüm açık kalır.
   - Kutunun solundaki çubuk ve sağdaki yön çizgisi yükselende yeşil, düşende kırmızı.
   - Türk Market, TEFAS ve BES'te Türk bayrağı; ABD Market ve ABD ETF'te ABD bayrağı.
@@ -34,8 +34,7 @@ Expo (React Native) ile yazıldı. Geliştirmek ve App Store'a göndermek için 
     - BES: 400 emeklilik yatırım fonu, günlük fiyat ve değişimiyle
     - Eurobond (Avrupa Birliği bayrağı): T.C. Hazine ve Maliye Bakanlığı'nın tedavüldeki dolar ve euro cinsi 38 eurobondu (33 USD, 5 EUR; Kasım 2026); vade, kupon, fiyat (100 nominal başına) ve yıllık getiri. Liste Ziraat Bankası ve eurobondpro.com ile karşılaştırılarak doğrulandı.
     - Kripto: piyasa değerine göre ilk 491 coin
-    - Endeks: S&P 500, Nasdaq 100, BIST 100 (yalnız izlenir, portföye eklenmez)
-    - Kurlar: Dolar (USD/TRY) ve Euro (EUR/TRY); dokununca portföye döviz olarak eklenir
+    - Nakit: Türk Lirası (fiyatı hep 1 ₺), Dolar (USD/TRY) ve Euro (EUR/TRY); dokununca portföye nakit olarak eklenir. Endeksler (BIST 100, S&P 500, Nasdaq 100) yalnız üstteki Piyasa nabzında görünür.
     - Karşılaştır: [Grafik](https://2n86njp68z-sketch.github.io/Grafik/) sitesi (temettü dahil getiri grafikleri, TL/USD, karşılaştırma); uygulama içi tarayıcıda (iOS'ta Safari penceresi) açılır
       - "Portföyümü karşılaştır": portföyün TL değeri en büyük 4 varlığı (Grafik'in listesinde olanlar) Grafik'te aynı grafikte, temettü dahil açılır; dönem en eski alışı kapsar
     - ABD ETF: ABD borsalarındaki 5.830 ETF; en bilinenler (SPY, VOO, IVV, QQQ…) en üstte, logolar çıkaran şirketin sitesinden
@@ -73,7 +72,7 @@ Expo (React Native) ile yazıldı. Geliştirmek ve App Store'a göndermek için 
   - Türk Market: Borsa İstanbul hisseleri (THYAO, ASELS…)
   - ABD Market: ABD hisseleri (AAPL, BRK.B…)
   - Kripto (BTC, ETH…)
-  - Döviz (USD, EUR, GBP, CHF)
+  - Nakit: Türk lirası (TL; fiyat sorulmaz, miktar TL tutarı olarak girilir, fiyatı hep 1 ₺) ve döviz (USD, EUR, GBP, CHF)
   - Emtia: altın, gümüş, platin, paladyum, Brent petrol (dolar ve TL bazında)
   - TEFAS ve BES fonları (fiyat TEFAS'tan otomatik; TEFAS'ta işlem görmeyen fonun fiyatı elle girilebilir)
   - Eurobond: miktar nominal olarak girilir, fiyat 100 nominal başınadır; değer = nominal × fiyat / 100
@@ -276,7 +275,7 @@ Uygulama tarafı hazır: gizlilik politikası, yasal uyarı, veri kaynakları, A
   - Sağlayıcı değişirse yalnızca `src/lib/prices.ts` değişir.
 - Geçmiş kurlar da Yahoo Finance'ten günlük kapanış olarak alınıyor. Gün içi kur farkı dikkate alınmıyor.
 - TEFAS fon servisi resmi olarak belgelenmemiştir; değişirse fon fiyatları gelmez (o zaman fiyat elle girilebilir).
-- Türkiye CDS'i yok: güncel CDS yayımlayan siteler (investing.com, Bloomberg HT, doviz.com) ya ücretli ya da otomatik veri çekmeye izin vermiyor; ücretsiz `fveri.com` verisi Haziran 2026'da kalmış. Lisanslı bir kaynak bulununca Kurlar bölümüne eklenebilir.
+- Türkiye CDS'i yok: güncel CDS yayımlayan siteler (investing.com, Bloomberg HT, doviz.com) ya ücretli ya da otomatik veri çekmeye izin vermiyor; ücretsiz `fveri.com` verisi Haziran 2026'da kalmış. Lisanslı bir kaynak bulununca Nakit bölümünün yanına eklenebilir.
 - TÜFE, TCMB sayfasındaki tablodan okunuyor; sayfanın düzeni değişirse okuma bozulabilir (o zaman OECD'ye düşer). Daha sağlam yol TCMB EVDS servisi (`evds3.tcmb.gov.tr`, ücretsiz ama kişisel API anahtarı ister).
 - Bedelsiz ve temettü kayıtları web sürümünde alınamıyor (kaynaklar tarayıcıdan erişime izin vermiyor); telefondaki uygulamada çalışır.
 - Veriler yalnızca telefonda duruyor; uygulama silinirse gider. Ayarlar'dan düzenli yedek alınmalı.

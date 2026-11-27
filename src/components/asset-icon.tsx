@@ -3,7 +3,7 @@ import { Platform, Text, View } from 'react-native';
 
 import { CompanyLogo } from '@/components/company-logo';
 import { Font, useColors } from '@/constants/theme';
-import { assetCurrency, commodityInfo, type CommodityLook } from '@/lib/assets';
+import { assetCurrency, commodityInfo, isTryCash, type CommodityLook } from '@/lib/assets';
 import { stockInfo } from '@/lib/markets';
 import Svg, {
   Circle,
@@ -345,8 +345,9 @@ export function CategoryIcon({ kind, size }: { kind: AssetKind; size: number }) 
           <CryptoMark />
         </Round>
       );
+    // Nakit: Türk lirası ve döviz
     case 'fx':
-      return <PairIcon main="USD" second="EUR" size={size} />;
+      return <PairIcon main="TR" second="USD" size={size} />;
     // ABD ETF'leri ABD bayrağıyla, TEFAS ve BES fonları Türk bayrağıyla gösterilir.
     case 'etf':
       return <FlagIcon code="USD" size={size} />;
@@ -392,6 +393,25 @@ export function AssetIcon({
   const commodity = kind === 'metal' ? commodityInfo(symbol) : undefined;
   // Eurobond: Türk bayrağı ve sağ altta döviz cinsinin bayrağı (USD/EUR)
   const bond = kind === 'eurobond';
+  // Türk lirası nakit: yalnız Türk bayrağı
+  if (isTryCash(kind, symbol)) {
+    return ring ? (
+      <View
+        style={{
+          width: size,
+          height: size,
+          borderRadius: size / 2,
+          borderWidth: 2,
+          borderColor: color,
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}>
+        <FlagIcon code="TR" size={size - 7} />
+      </View>
+    ) : (
+      <FlagIcon code="TR" size={size} />
+    );
+  }
   const pictured = logo || commodity != null || bond || (kind === 'fx' && FLAGS[symbol] != null);
   if (pictured) {
     const inner = ring ? size - 7 : size;

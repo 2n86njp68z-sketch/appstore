@@ -7,7 +7,15 @@ import { AssetAlerts } from '@/components/price-alerts';
 import { Card, PrimaryButton, SectionTitle, StatRow } from '@/components/ui';
 import { Font, pnlColor, useColors } from '@/constants/theme';
 import { usePortfolio } from '@/context/portfolio-context';
-import { allowsManualPrice, displaySymbol, isManualPriced, kindInfo, priceFactor, quantityUnit } from '@/lib/assets';
+import {
+  allowsManualPrice,
+  displaySymbol,
+  isManualPriced,
+  isTryCash,
+  kindInfo,
+  priceFactor,
+  quantityUnit,
+} from '@/lib/assets';
 import {
   currencySymbol,
   formatMoney,
@@ -174,7 +182,9 @@ export default function AssetScreen() {
 
         {h.quantity > 0 && <CurrencyBreakdown holding={h} />}
 
-        <AssetAlerts kind={h.kind} symbol={h.symbol} price={h.priceMissing ? undefined : h.price} />
+        {!isTryCash(h.kind, h.symbol) && (
+          <AssetAlerts kind={h.kind} symbol={h.symbol} price={h.priceMissing ? undefined : h.price} />
+        )}
 
         <CorporateEvents holding={h} />
 
