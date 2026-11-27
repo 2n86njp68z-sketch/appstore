@@ -153,6 +153,12 @@ curl -sL -o /tmp/eurobondpro.html https://eurobondpro.com/hazine-eurobond-listes
 python3 -I scripts/build-eurobond-data.py /tmp/ziraat-eurobond.html /tmp/eurobondpro.html > src/data/eurobonds.ts
 ```
 
+Uygulama simgeleri (iOS, açılış, Android, favicon) logodaki italik G'den üretilir (Playwright gerekir):
+
+```bash
+node scripts/build-app-icons.mjs
+```
+
 Logo (GENIUS) çizgileri Unbounded Black yazı tipinden üretilir (fontTools gerekir):
 
 ```bash
