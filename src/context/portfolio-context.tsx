@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { AppState, Platform } from 'react-native';
 
 import { assetKey, isManualPriced, quoteSymbolFor } from '@/lib/assets';
+import { makeBackup, mergeTransactions, type BackupData } from '@/lib/backup';
 import { BENCH_SYMBOLS, computeBenchmarks, type BenchmarkResult, type BenchSeries } from '@/lib/benchmarks';
 import { computeHoldings, computeSummary, DISPLAY_CURRENCIES, requiredQuoteSymbols } from '@/lib/portfolio';
 import {
@@ -184,6 +185,8 @@ interface PortfolioContextValue {
   manualPrices: Record<string, number>;
   /** Varlık anahtarına göre bedelsiz/bölünme ve temettü kayıtları. */
   actionsByKey: Record<string, CorporateAction[]>;
+  exportBackup: () => string;
+  importBackup: (data: BackupData, mode: 'replace' | 'merge') => void;
 }
 
 const PortfolioContext = createContext<PortfolioContextValue | null>(null);
@@ -350,6 +353,39 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  /** Yedek dosyasının içeriği (JSON). */
+  const exportBackup = useCallback(
+    () =>
+      makeBackup({
+        transactions: transactionsRef.current,
+        manualPrices,
+        displayCurrency,
+      }),
+    [manualPrices, displayCurrency],
+  );
+
+  /** Yedekten geri yükler: "replace" mevcut işlemlerin yerine koyar, "merge" eksik olanları ekler. */
+  const importBackup = useCallback(
+    (data: BackupData, mode: 'replace' | 'merge') => {
+      const next =
+        mode === 'replace' ? data.transactions : mergeTransactions(transactionsRef.current, data.transactions);
+      transactionsRef.current = next;
+      setTransactions(next);
+      saveTransactions(next).catch(() => {});
+      setManualPrices((prev) => {
+        const prices = mode === 'replace' ? data.manualPrices : { ...data.manualPrices, ...prev };
+        saveManualPrices(prices).catch(() => {});
+        return prices;
+      });
+      if (mode === 'replace') {
+        setDisplayCurrency(data.displayCurrency);
+        saveDisplayCurrency(data.displayCurrency).catch(() => {});
+      }
+      refresh();
+    },
+    [refresh],
+  );
+
   const cycleDisplayCurrency = useCallback(() => {
     setDisplayCurrency((prev) => {
       const next = DISPLAY_CURRENCIES[(DISPLAY_CURRENCIES.indexOf(prev) + 1) % DISPLAY_CURRENCIES.length];
@@ -399,10 +435,14 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
       setManualPrice,
       manualPrices,
       actionsByKey,
+      exportBackup,
+      importBackup,
     }),
     [
       manualPrices,
       actionsByKey,
+      exportBackup,
+      importBackup,
       displayCurrency,
       cycleDisplayCurrency,
       ready,

@@ -73,6 +73,7 @@ export default function RootLayout() {
             <Stack.Screen name="index" options={{ title: 'GENIUS', headerTitle: () => <GeniusLogo /> }} />
             <Stack.Screen name="add" options={{ title: 'İşlem Ekle', presentation: 'modal' }} />
             <Stack.Screen name="asset/[key]" options={{ title: '' }} />
+            <Stack.Screen name="settings" options={{ title: 'Ayarlar' }} />
           </Stack>
         </MarketDrawerProvider>
         <StatusBar style="auto" />

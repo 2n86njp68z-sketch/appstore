@@ -13,6 +13,8 @@ import {
   useWindowDimensions,
 } from 'react-native';
 
+import Svg, { Path } from 'react-native-svg';
+
 import { AssetIcon, CategoryIcon } from '@/components/asset-icon';
 import { BenchmarkCard } from '@/components/benchmark-card';
 import { DonutChart } from '@/components/donut-chart';
@@ -136,15 +138,34 @@ export default function PortfolioScreen() {
         options={{
           headerLeft: () => <DrawerButton />,
           headerRight: () => (
-            <Pressable
-              onPress={() => router.push('/add')}
-              hitSlop={12}
-              accessibilityRole="button"
-              accessibilityLabel="İşlem ekle"
-              style={({ pressed }) => [styles.addButton, { backgroundColor: c.tint, opacity: pressed ? 0.7 : 1 }]}>
-              <View style={[styles.plusH, { backgroundColor: c.tintText }]} />
-              <View style={[styles.plusV, { backgroundColor: c.tintText }]} />
-            </Pressable>
+            <View style={styles.headerButtons}>
+              <Pressable
+                onPress={() => router.push('/settings')}
+                hitSlop={10}
+                accessibilityRole="button"
+                accessibilityLabel="Ayarlar"
+                style={({ pressed }) => [styles.gearButton, { backgroundColor: c.chip, opacity: pressed ? 0.7 : 1 }]}>
+                <Svg width={18} height={18} viewBox="0 0 24 24">
+                  <Path
+                    d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"
+                    stroke={c.text}
+                    strokeWidth={1.8}
+                    fill="none"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </Svg>
+              </Pressable>
+              <Pressable
+                onPress={() => router.push('/add')}
+                hitSlop={12}
+                accessibilityRole="button"
+                accessibilityLabel="İşlem ekle"
+                style={({ pressed }) => [styles.addButton, { backgroundColor: c.tint, opacity: pressed ? 0.7 : 1 }]}>
+                <View style={[styles.plusH, { backgroundColor: c.tintText }]} />
+                <View style={[styles.plusV, { backgroundColor: c.tintText }]} />
+              </Pressable>
+            </View>
           ),
         }}
       />
@@ -471,6 +492,18 @@ const styles = StyleSheet.create({
   },
   tabular: {
     fontVariant: ['tabular-nums'],
+  },
+  headerButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  gearButton: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   addButton: {
     width: 34,

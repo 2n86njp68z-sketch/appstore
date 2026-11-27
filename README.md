@@ -67,6 +67,7 @@ Expo (React Native) ile yazıldı. Geliştirmek ve App Store'a göndermek için 
   - Karşılaştırma kartında portföy değerine alınan temettüler de eklenir.
 - **Fiyatlar:** Otomatik çekilir. Aşağı çekince ve uygulama öne gelince yenilenir.
 - **Kayıt:** Veriler yalnızca telefonda tutulur. Hesap ya da sunucu gerekmez.
+- **Yedekleme (Ayarlar → Yedekleme):** İşlemler ve elle girilen fiyatlar tek bir dosya olarak dışa aktarılır (telefonda paylaşma menüsü: Dosyalar'a/iCloud Drive'a kaydet, AirDrop, mesaj; web'de indirme). Yedekten geri yükleme mevcut işlemlerin yerine geçer; "Yedeği ekle" yalnız eksik işlemleri ekler.
 - **Görünüm:** Telefonun ayarına göre gündüz beyaz, gece siyah. Yazı tipi Manrope (₺ ve Türkçe harf destekli).
 
 ## Web sürümü (link)
@@ -197,4 +198,4 @@ Göndermeden önce `app.json` içindeki `ios.bundleIdentifier` değerini (şu an
 - Türkiye CDS'i yok: güncel CDS yayımlayan siteler (investing.com, Bloomberg HT, doviz.com) ya ücretli ya da otomatik veri çekmeye izin vermiyor; ücretsiz `fveri.com` verisi Haziran 2026'da kalmış. Lisanslı bir kaynak bulununca Kurlar bölümüne eklenebilir.
 - TÜFE, TCMB sayfasındaki tablodan okunuyor; sayfanın düzeni değişirse okuma bozulabilir (o zaman OECD'ye düşer). Daha sağlam yol TCMB EVDS servisi (`evds3.tcmb.gov.tr`, ücretsiz ama kişisel API anahtarı ister).
 - Bedelsiz ve temettü kayıtları web sürümünde alınamıyor (kaynaklar tarayıcıdan erişime izin vermiyor); telefondaki uygulamada çalışır.
-- Veriler yalnızca telefonda duruyor. Uygulama silinirse veriler de silinir. Yedekleme ileride eklenebilir.
+- Veriler yalnızca telefonda duruyor; uygulama silinirse gider. Ayarlar'dan düzenli yedek alınmalı.
