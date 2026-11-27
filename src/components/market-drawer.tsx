@@ -39,6 +39,7 @@ import { paletteFor } from '@/lib/donut';
 import { formatNumber, formatPct, formatPrice } from '@/lib/format';
 import { MARKETS, searchStocks, type MarketKey, type MarketStock } from '@/lib/markets';
 import { commodityInfo, displaySymbol } from '@/lib/assets';
+import { fetchGrafikCatalog, portfolioCompareLink } from '@/lib/grafik';
 import {
   COMPARE_LINKS,
   OVERVIEW,
@@ -168,7 +169,13 @@ interface LinkRowItem {
   link: LinkItem;
 }
 
-type ListItem = StockItem | OverviewRowItem | LinkRowItem;
+/** "Portföyümü karşılaştır": portföyün en büyük varlıkları Grafik'te aynı grafikte. */
+interface PortfolioCompareItem {
+  key: 'compare:portfolio';
+  portfolioCompare: true;
+}
+
+type ListItem = StockItem | OverviewRowItem | LinkRowItem | PortfolioCompareItem;
 
 interface MarketSection {
   key: string;
@@ -209,7 +216,11 @@ const OVERVIEW_ROWS = Object.fromEntries(
   ]),
 ) as Record<OverviewKey, OverviewRowItem[]>;
 
-const LINK_ROWS: LinkRowItem[] = COMPARE_LINKS.items.map((link) => ({ key: `link:${link.url}`, link }));
+const PORTFOLIO_COMPARE_ROW: PortfolioCompareItem = { key: 'compare:portfolio', portfolioCompare: true };
+const LINK_ROWS: ListItem[] = [
+  PORTFOLIO_COMPARE_ROW,
+  ...COMPARE_LINKS.items.map((link) => ({ key: `link:${link.url}`, link })),
+];
 
 function overviewIcon(key: OverviewKey, size: number) {
   return key === 'index' ? <IndexMark size={size} /> : <CategoryIcon kind="fx" size={size} />;
@@ -336,8 +347,12 @@ function MarketDrawer({ open, onClose }: { open: boolean; onClose: () => void })
         title: d.title,
         available: true,
         icon: <CompareMark size={30} />,
-        total: linkResults ? linkResults.length : LINK_ROWS.length,
-        data: linkResults ? LINK_ROWS.filter((r) => linkResults.includes(r.link)) : expanded === d.key ? LINK_ROWS : [],
+        total: linkResults ? linkResults.length + 1 : LINK_ROWS.length,
+        data: linkResults
+          ? LINK_ROWS.filter((r) => !('link' in r) || linkResults.includes(r.link))
+          : expanded === d.key
+            ? LINK_ROWS
+            : [],
       };
     }
     if (d.overview) {
@@ -528,6 +543,7 @@ function MarketDrawer({ open, onClose }: { open: boolean; onClose: () => void })
             />
           )}
           renderItem={({ item }: { item: ListItem }) => {
+            if ('portfolioCompare' in item) return <PortfolioCompareRow />;
             if ('link' in item) return <LinkRow item={item.link} />;
             if ('overview' in item) {
               return (
@@ -612,6 +628,74 @@ function SectionHeader({
   );
 }
 
+/**
+ * Portföyün en büyük 4 varlığını (Grafik'te bulunanlar) Grafik'te aynı grafikte açar. Grafik'in listesi
+ * satır görününce indirilir; liste gelmeden dokunulursa eşleşen tüm semboller kullanılır.
+ */
+function PortfolioCompareRow() {
+  const c = useColors();
+  const { holdings } = usePortfolio();
+  const [catalog, setCatalog] = useState<Set<string> | null>(null);
+  useEffect(() => {
+    let alive = true;
+    fetchGrafikCatalog()
+      .then((set) => alive && setCatalog(set))
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
+  const link = portfolioCompareLink(holdings, catalog);
+  const subtitle = link
+    ? `${link.holdings.map((h) => displaySymbol(h.kind, h.symbol)).join(', ')} · temettü dahil, aynı grafikte`
+    : holdings.length === 0
+      ? 'Önce portföye varlık ekle'
+      : 'Portföyündeki varlıklar Grafik listesinde yok';
+  return (
+    <Pressable
+      onPress={async () => {
+        const set = catalog ?? (await fetchGrafikCatalog().catch(() => null));
+        const target = portfolioCompareLink(holdings, set);
+        if (target) void WebBrowser.openBrowserAsync(target.url);
+      }}
+      disabled={!link}
+      accessibilityRole="link"
+      accessibilityLabel={`Portföyümü karşılaştır: ${subtitle}`}
+      style={({ pressed }) => [
+        styles.stockCard,
+        { backgroundColor: c.card, borderColor: c.border, opacity: link ? 1 : 0.6 },
+        pressed && { opacity: 0.6 },
+      ]}>
+      <View style={[styles.stockBar, { backgroundColor: '#7C5CFF' }]} />
+      <CompareMark size={36} />
+      <View style={styles.stockMain}>
+        <Text style={[Type.headline, { color: c.text, fontSize: 15 }]} numberOfLines={1}>
+          Portföyümü karşılaştır
+        </Text>
+        <Text style={[Type.subhead, { color: c.textSecondary, fontSize: 12 }]} numberOfLines={2}>
+          {subtitle}
+        </Text>
+      </View>
+      <ExternalIcon color={c.textSecondary} />
+    </Pressable>
+  );
+}
+
+function ExternalIcon({ color }: { color: string }) {
+  return (
+    <Svg width={20} height={20} viewBox="0 0 24 24" accessibilityLabel="Tarayıcıda açılır">
+      <Path
+        d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"
+        stroke={color}
+        strokeWidth={2.2}
+        fill="none"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
+
 /** Site bağlantısı: uygulama içi tarayıcıda (iOS'ta Safari penceresi) açılır. */
 const LinkRow = memo(function LinkRow({ item }: { item: LinkItem }) {
   const c = useColors();
@@ -637,16 +721,7 @@ const LinkRow = memo(function LinkRow({ item }: { item: LinkItem }) {
           {item.name}
         </Text>
       </View>
-      <Svg width={20} height={20} viewBox="0 0 24 24" accessibilityLabel="Tarayıcıda açılır">
-        <Path
-          d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"
-          stroke={c.textSecondary}
-          strokeWidth={2.2}
-          fill="none"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      </Svg>
+      <ExternalIcon color={c.textSecondary} />
     </Pressable>
   );
 });

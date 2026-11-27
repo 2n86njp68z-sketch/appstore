@@ -32,6 +32,7 @@ Expo (React Native) ile yazıldı. Geliştirmek ve App Store'a göndermek için 
     - Endeks: S&P 500, Nasdaq 100, BIST 100 (yalnız izlenir, portföye eklenmez)
     - Kurlar: Dolar (USD/TRY) ve Euro (EUR/TRY); dokununca portföye döviz olarak eklenir
     - Karşılaştır: [Grafik](https://2n86njp68z-sketch.github.io/Grafik/) sitesi (temettü dahil getiri grafikleri, TL/USD, karşılaştırma); uygulama içi tarayıcıda (iOS'ta Safari penceresi) açılır
+      - "Portföyümü karşılaştır": portföyün TL değeri en büyük 4 varlığı (Grafik'in listesinde olanlar) Grafik'te aynı grafikte, temettü dahil açılır; dönem en eski alışı kapsar
     - ABD ETF: ABD borsalarındaki 5.830 ETF; en bilinenler (SPY, VOO, IVV, QQQ…) en üstte, logolar çıkaran şirketin sitesinden
   - Her satırda logo, kod, şirket adı, fiyat ve günlük değişim yazar.
   - Arama tüm bölümlerde birden yapılır.
