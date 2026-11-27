@@ -22,6 +22,8 @@ Expo (React Native) ile yazıldı. Geliştirmek ve App Store'a göndermek için 
 - **Piyasalar menüsü (sol üstteki ☰):**
   - En üstte arama çubuğu var. Kod ya da şirket adı yazdıkça sonuçlar anında süzülür, Türkçe harf farkı önemli değildir.
   - Bölümler: Türk Market, TEFAS, BES (Türk bayraklılar), ABD Market, ABD ETF (ABD bayraklılar), Emtia, Kripto, Endeks, Kurlar, Karşılaştır.
+  - En üstte "Piyasa nabzı": BIST 100, S&P 500, Nasdaq 100, Dolar, Euro, Gram Altın ve Bitcoin yan yana kayar.
+  - Bölümler gruplar halinde (Türkiye, ABD, Emtia ve kripto, Piyasa özeti, Araçlar), her biri kendi renginde kart.
   - Bölüme dokununca kalemler alt alta kutucuklar halinde açılır. Aynı anda tek bölüm açık kalır.
   - Kutunun solundaki çubuk ve sağdaki yön çizgisi yükselende yeşil, düşende kırmızı.
   - Türk Market, TEFAS ve BES'te Türk bayrağı; ABD Market ve ABD ETF'te ABD bayrağı.

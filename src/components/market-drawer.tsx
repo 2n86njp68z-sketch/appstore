@@ -8,6 +8,7 @@ import {
   useEffect,
   useMemo,
   useRef,
+  useId,
   useState,
   type ReactNode,
 } from 'react';
@@ -19,16 +20,18 @@ import {
   PanResponder,
   Platform,
   Pressable,
+  ScrollView,
   SectionList,
   StyleSheet,
   Text,
   TextInput,
   View,
+  useColorScheme,
   useWindowDimensions,
   type ListViewToken,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Svg, { Circle, Line, Path } from 'react-native-svg';
+import Svg, { Circle, Defs, Line, LinearGradient, Path, RadialGradient, Rect, Stop } from 'react-native-svg';
 
 import { AssetIcon, CategoryIcon, CompareMark, FlagIcon, IndexMark, PairIcon } from '@/components/asset-icon';
 import { CompanyLogo } from '@/components/company-logo';
@@ -37,7 +40,7 @@ import { TrendIcon } from '@/components/trend-icon';
 import { pnlColor, pnlSoft, Radius, Type, useColors } from '@/constants/theme';
 import { usePortfolio } from '@/context/portfolio-context';
 import { paletteFor } from '@/lib/donut';
-import { formatNumber, formatPct, formatPrice } from '@/lib/format';
+import { formatNumber, formatPct, formatPrice, trUpper } from '@/lib/format';
 import { MARKETS, searchStocks, type MarketKey, type MarketStock } from '@/lib/markets';
 import { commodityInfo, displaySymbol } from '@/lib/assets';
 import { fetchGrafikCatalog, portfolioCompareLink } from '@/lib/grafik';
@@ -52,7 +55,7 @@ import {
 } from '@/lib/overview';
 import { resolveAssetQuote } from '@/lib/portfolio';
 import { fetchAnyQuotes } from '@/lib/prices';
-import type { AssetKind, AssetQuote, RawQuote } from '@/lib/types';
+import type { AssetKind, AssetQuote, Currency, RawQuote } from '@/lib/types';
 
 // ---------------------------------------------------------------------------
 // Açma/kapama
@@ -181,6 +184,13 @@ type ListItem = StockItem | OverviewRowItem | LinkRowItem | PortfolioCompareItem
 interface MarketSection {
   key: string;
   title: string;
+  /** Kartın altındaki kısa açıklama. */
+  subtitle: string;
+  /** Kartın rengi. */
+  accent: string;
+  /** Grup adı; yalnız grubun görünen ilk bölümünde üstte yazar. */
+  group: string;
+  showGroup?: boolean;
   icon: ReactNode;
   available: boolean;
   market?: MarketKey;
@@ -189,24 +199,165 @@ interface MarketSection {
   data: ListItem[];
 }
 
-type SectionDef =
-  | { key: string; title: string; kind: AssetKind; market: MarketKey; overview?: undefined; links?: undefined }
-  | { key: OverviewKey; title: string; overview: OverviewKey; kind?: undefined; market?: undefined; links?: undefined }
-  | { key: 'compare'; title: string; links: true; kind?: undefined; market?: undefined; overview?: undefined };
+interface SectionLook {
+  subtitle: string;
+  accent: string;
+  group: string;
+}
+
+type SectionDef = SectionLook &
+  (
+    | { key: string; title: string; kind: AssetKind; market: MarketKey; overview?: undefined; links?: undefined }
+    | {
+        key: OverviewKey;
+        title: string;
+        overview: OverviewKey;
+        kind?: undefined;
+        market?: undefined;
+        links?: undefined;
+      }
+    | { key: 'compare'; title: string; links: true; kind?: undefined; market?: undefined; overview?: undefined }
+  );
 
 const SECTION_DEFS: SectionDef[] = [
   // Türk bayraklılar, ABD bayraklılar alt alta; ardından emtia, kripto, endeksler ve kurlar.
-  { key: 'bist', title: 'Türk Market', kind: 'bist', market: 'bist' },
-  { key: 'fund', title: 'TEFAS', kind: 'fund', market: 'fund' },
-  { key: 'bes', title: 'BES', kind: 'bes', market: 'bes' },
-  { key: 'us', title: 'ABD Market', kind: 'us', market: 'us' },
-  { key: 'etf', title: 'ABD ETF', kind: 'etf', market: 'etf' },
-  { key: 'metal', title: 'Emtia', kind: 'metal', market: 'metal' },
-  { key: 'crypto', title: 'Kripto', kind: 'crypto', market: 'crypto' },
-  { key: 'index', title: OVERVIEW.index.title, overview: 'index' },
-  { key: 'rates', title: OVERVIEW.rates.title, overview: 'rates' },
-  { key: 'compare', title: COMPARE_LINKS.title, links: true },
+  {
+    key: 'bist',
+    title: 'Türk Market',
+    kind: 'bist',
+    market: 'bist',
+    group: 'Türkiye',
+    accent: '#E30A17',
+    subtitle: 'Borsa İstanbul hisseleri',
+  },
+  {
+    key: 'fund',
+    title: 'TEFAS',
+    kind: 'fund',
+    market: 'fund',
+    group: 'Türkiye',
+    accent: '#E64980',
+    subtitle: 'Yatırım fonları',
+  },
+  {
+    key: 'bes',
+    title: 'BES',
+    kind: 'bes',
+    market: 'bes',
+    group: 'Türkiye',
+    accent: '#2B8A3E',
+    subtitle: 'Emeklilik fonları',
+  },
+  {
+    key: 'us',
+    title: 'ABD Market',
+    kind: 'us',
+    market: 'us',
+    group: 'ABD',
+    accent: '#2F6BFF',
+    subtitle: 'NASDAQ ve NYSE',
+  },
+  {
+    key: 'etf',
+    title: 'ABD ETF',
+    kind: 'etf',
+    market: 'etf',
+    group: 'ABD',
+    accent: '#15AABF',
+    subtitle: 'Borsa yatırım fonları',
+  },
+  {
+    key: 'metal',
+    title: 'Emtia',
+    kind: 'metal',
+    market: 'metal',
+    group: 'Emtia ve kripto',
+    accent: '#E0A100',
+    subtitle: 'Altın, gümüş, platin, petrol',
+  },
+  {
+    key: 'crypto',
+    title: 'Kripto',
+    kind: 'crypto',
+    market: 'crypto',
+    group: 'Emtia ve kripto',
+    accent: '#F7931A',
+    subtitle: 'Bitcoin, Ethereum, Solana',
+  },
+  {
+    key: 'index',
+    title: OVERVIEW.index.title,
+    overview: 'index',
+    group: 'Piyasa özeti',
+    accent: '#4F46E5',
+    subtitle: 'S&P 500, Nasdaq, BIST 100',
+  },
+  {
+    key: 'rates',
+    title: OVERVIEW.rates.title,
+    overview: 'rates',
+    group: 'Piyasa özeti',
+    accent: '#14B8A6',
+    subtitle: 'Dolar ve Euro',
+  },
+  {
+    key: 'compare',
+    title: COMPARE_LINKS.title,
+    links: true,
+    group: 'Araçlar',
+    accent: '#7C5CFF',
+    subtitle: 'Getirileri aynı grafikte gör',
+  },
 ];
+
+/**
+ * Piyasa nabzı şeridine dokunuluyor mu: şerit yatay kaydığı için oradan başlayan sürükleme menüyü
+ * kapatmaz. Ekranda tek menü olduğundan modül düzeyinde tutulur.
+ */
+let stripTouching = false;
+
+/** "#RRGGBB" → saydamlıklı renk. */
+function withAlpha(hex: string, alpha: number): string {
+  const n = parseInt(hex.slice(1), 16);
+  return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
+}
+
+/** Menünün üstündeki "Piyasa nabzı" şeridi. */
+const PULSE: {
+  label: string;
+  icon: (size: number) => ReactNode;
+  get: (q: Record<string, RawQuote>) => { price: number; previousClose?: number } | undefined;
+  currency: Currency | null;
+}[] = [
+  { label: 'BIST 100', icon: (s) => <FlagIcon code="TR" size={s} />, get: (q) => q['XU100.IS'], currency: null },
+  { label: 'S&P 500', icon: (s) => <FlagIcon code="USD" size={s} />, get: (q) => q['^GSPC'], currency: null },
+  { label: 'Nasdaq 100', icon: (s) => <FlagIcon code="USD" size={s} />, get: (q) => q['^NDX'], currency: null },
+  {
+    label: 'Dolar',
+    icon: (s) => <PairIcon main="USD" second="TR" size={s} />,
+    get: (q) => q['USDTRY=X'],
+    currency: 'TRY',
+  },
+  {
+    label: 'Euro',
+    icon: (s) => <PairIcon main="EUR" second="TR" size={s} />,
+    get: (q) => q['EURTRY=X'],
+    currency: 'TRY',
+  },
+  {
+    label: 'Gram Altın',
+    icon: (s) => <CategoryIcon kind="metal" size={s} />,
+    get: (q) => resolveAssetQuote('metal', 'GRAM_ALTIN', q, {}),
+    currency: 'TRY',
+  },
+  {
+    label: 'Bitcoin',
+    icon: (s) => <CategoryIcon kind="crypto" size={s} />,
+    get: (q) => q['CG:bitcoin'],
+    currency: 'USD',
+  },
+];
+const PULSE_KEYS = ['XU100.IS', '^GSPC', '^NDX', 'USDTRY=X', 'EURTRY=X', 'GC=F', 'CG:bitcoin'];
 
 const MARKET_KEYS = SECTION_DEFS.flatMap((d) => (d.market ? [d.market] : []));
 
@@ -296,7 +447,7 @@ function MarketDrawer({ open, onClose }: { open: boolean; onClose: () => void })
   const pan = useMemo(
     () =>
       PanResponder.create({
-        onMoveShouldSetPanResponder: (_, g) => g.dx < -12 && Math.abs(g.dx) > Math.abs(g.dy) * 1.5,
+        onMoveShouldSetPanResponder: (_, g) => !stripTouching && g.dx < -12 && Math.abs(g.dx) > Math.abs(g.dy) * 1.5,
         onPanResponderRelease: (_, g) => {
           if (g.dx < -50 || g.vx < -0.5) onClose();
         },
@@ -342,8 +493,10 @@ function MarketDrawer({ open, onClose }: { open: boolean; onClose: () => void })
     if (d.links) return linkResults.length > 0;
     return d.market ? results[d.market].length > 0 : overviewResults[d.overview].length > 0;
   }).map((d) => {
+    const look = { subtitle: d.subtitle, accent: d.accent, group: d.group };
     if (d.links) {
       return {
+        ...look,
         key: d.key,
         title: d.title,
         available: true,
@@ -360,6 +513,7 @@ function MarketDrawer({ open, onClose }: { open: boolean; onClose: () => void })
       const found = overviewResults?.[d.overview];
       const rows = OVERVIEW_ROWS[d.overview];
       return {
+        ...look,
         key: d.key,
         title: d.title,
         available: true,
@@ -377,6 +531,7 @@ function MarketDrawer({ open, onClose }: { open: boolean; onClose: () => void })
       data = itemsFor(m).list;
     }
     return {
+      ...look,
       key: d.key,
       title: d.title,
       available: m != null,
@@ -385,6 +540,10 @@ function MarketDrawer({ open, onClose }: { open: boolean; onClose: () => void })
       total: m ? (results ? results[m].length : MARKETS[m].stocks.length) : undefined,
       data,
     };
+  });
+  // Grup adı, grubun görünen ilk bölümünün üstünde yazar.
+  sections.forEach((sec, i) => {
+    sec.showGroup = i === 0 || sections[i - 1].group !== sec.group;
   });
 
   const requestRef = useRef(request);
@@ -429,6 +588,11 @@ function MarketDrawer({ open, onClose }: { open: boolean; onClose: () => void })
     }
     if (symbols.length) request(symbols);
   }, [open, results, overviewResults, expanded, request]);
+
+  // Piyasa nabzı şeridinin fiyatları menü açılınca istenir.
+  useEffect(() => {
+    if (open) request(PULSE_KEYS);
+  }, [open, request]);
 
   // Kripto açılınca tüm listenin fiyatı bir kerede (100'lük gruplarla) alınır; CoinGecko'nun ücretsiz
   // servisi dakikalık istek sınırı uyguladığı için kaydırdıkça ayrı ayrı istemekten daha güvenli.
@@ -486,6 +650,7 @@ function MarketDrawer({ open, onClose }: { open: boolean; onClose: () => void })
             transform: [{ translateX: progress.interpolate({ inputRange: [0, 1], outputRange: [-panelWidth, 0] }) }],
           },
         ]}>
+        <TopGlow />
         <View style={styles.headerRow}>
           <View style={styles.drawerLogo}>
             <GeniusLogo height={30} />
@@ -524,6 +689,19 @@ function MarketDrawer({ open, onClose }: { open: boolean; onClose: () => void })
 
         <SectionList
           sections={sections}
+          ListHeaderComponent={
+            searching ? undefined : (
+              <PulseStrip
+                quotes={allQuotes}
+                onTouchStart={() => {
+                  stripTouching = true;
+                }}
+                onTouchEnd={() => {
+                  stripTouching = false;
+                }}
+              />
+            )
+          }
           keyExtractor={(item) => item.key}
           stickySectionHeadersEnabled
           keyboardShouldPersistTaps="handled"
@@ -578,6 +756,86 @@ function MarketDrawer({ open, onClose }: { open: boolean; onClose: () => void })
   );
 }
 
+/** Menünün üstünde, logonun arkasında hafif mor parıltı. */
+function TopGlow() {
+  const id = 'glow' + useId().replace(/[^a-zA-Z0-9]/g, '');
+  const dark = useColorScheme() === 'dark';
+  return (
+    <Svg style={styles.glow} width="100%" height={260} pointerEvents="none">
+      <Defs>
+        <RadialGradient id={id} cx="18%" cy="0%" rx="85%" ry="100%">
+          <Stop offset="0" stopColor="#7C5CFF" stopOpacity={dark ? 0.38 : 0.2} />
+          <Stop offset="0.55" stopColor="#4F46E5" stopOpacity={dark ? 0.12 : 0.06} />
+          <Stop offset="1" stopColor="#4F46E5" stopOpacity={0} />
+        </RadialGradient>
+      </Defs>
+      <Rect x="0" y="0" width="100%" height="100%" fill={`url(#${id})`} />
+    </Svg>
+  );
+}
+
+/** "Piyasa nabzı": BIST 100, S&P 500, Nasdaq, Dolar, Euro, Gram Altın, Bitcoin yan yana kayar. */
+function PulseStrip({
+  quotes,
+  onTouchStart,
+  onTouchEnd,
+}: {
+  quotes: Record<string, RawQuote>;
+  onTouchStart: () => void;
+  onTouchEnd: () => void;
+}) {
+  const c = useColors();
+  return (
+    <View style={styles.pulse} onTouchStart={onTouchStart} onTouchEnd={onTouchEnd} onTouchCancel={onTouchEnd}>
+      <View style={styles.pulseHeader}>
+        <View style={[styles.liveDot, { backgroundColor: c.positive, shadowColor: c.positive }]} />
+        <Text style={[Type.overline, { color: c.textSecondary }]}>PİYASA NABZI</Text>
+      </View>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pulseRow}>
+        {PULSE.map((p) => {
+          const q = p.get(quotes);
+          const change =
+            q?.previousClose != null && q.previousClose > 0
+              ? ((q.price - q.previousClose) / q.previousClose) * 100
+              : undefined;
+          const value = q ? (p.currency ? formatPrice(q.price, p.currency) : formatNumber(q.price, 2, 2)) : '—';
+          return (
+            <View
+              key={p.label}
+              style={[styles.pulseChip, { backgroundColor: c.card, borderColor: c.border }]}
+              accessibilityLabel={`${p.label} ${value} ${change != null ? formatPct(change) : ''}`}>
+              <View style={styles.pulseTop}>
+                {p.icon(16)}
+                <Text style={[Type.caption, { color: c.textSecondary }]} numberOfLines={1}>
+                  {p.label}
+                </Text>
+              </View>
+              <Text style={[Type.number, { color: c.text, fontSize: 15 }]} numberOfLines={1}>
+                {value}
+              </Text>
+              <View style={styles.pulseChange}>
+                <TrendIcon change={change} up={c.positive} down={c.negative} flat={c.textTertiary} size={14} />
+                <Text
+                  style={[
+                    Type.caption,
+                    styles.changeText,
+                    { color: change != null ? pnlColor(c, change) : c.textTertiary },
+                  ]}>
+                  {change != null ? formatPct(change) : '—'}
+                </Text>
+              </View>
+            </View>
+          );
+        })}
+      </ScrollView>
+    </View>
+  );
+}
+
+/**
+ * Bölüm kartı: bölümün rengiyle hafif renk geçişli zemin, parlayan simge, açıklama, sayı rozeti ve
+ * açılınca dönen ok. Grubun ilk bölümünde üstte grup adı yazar.
+ */
 function SectionHeader({
   section,
   expanded,
@@ -590,42 +848,76 @@ function SectionHeader({
   onPress: () => void;
 }) {
   const c = useColors();
-  const active = section.available && expanded;
+  const dark = useColorScheme() === 'dark';
+  const id = 'sec' + useId().replace(/[^a-zA-Z0-9]/g, '');
+  const { accent } = section;
   return (
-    <View style={{ backgroundColor: c.background }}>
+    <View style={[styles.sectionWrap, { backgroundColor: c.background, paddingTop: section.showGroup ? 14 : 4 }]}>
+      {section.showGroup && (
+        <Text style={[Type.overline, styles.groupLabel, { color: c.textTertiary }]}>{trUpper(section.group)}</Text>
+      )}
       <Pressable
         onPress={onPress}
         accessibilityRole="button"
-        accessibilityState={{ expanded: active, disabled: !section.available }}
+        accessibilityLabel={`${section.title}, ${section.subtitle}${count != null ? `, ${count}` : ''}`}
+        accessibilityState={{ expanded }}
         style={({ pressed }) => [
-          styles.sectionRow,
-          { backgroundColor: active ? c.card : 'transparent', opacity: pressed ? 0.75 : 1 },
+          styles.sectionCard,
+          {
+            backgroundColor: c.card,
+            borderColor: withAlpha(accent, expanded ? 0.6 : dark ? 0.3 : 0.22),
+            transform: [{ scale: pressed ? 0.98 : 1 }],
+          },
         ]}>
-        {section.icon}
-        <Text style={[Type.headline, styles.sectionTitle, { color: c.text }]}>{section.title}</Text>
-        {section.available ? (
-          <>
-            {count != null && <Text style={[Type.subhead, { color: c.textTertiary }]}>{count}</Text>}
-            <Svg
-              width={14}
-              height={14}
-              viewBox="0 0 24 24"
-              style={{ transform: [{ rotate: expanded ? '90deg' : '0deg' }] }}>
-              <Path
-                d="M9 5 L16 12 L9 19"
-                stroke={c.textSecondary}
-                strokeWidth={2.6}
-                fill="none"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </Svg>
-          </>
-        ) : (
-          <View style={[styles.soon, { backgroundColor: c.chip }]}>
-            <Text style={[Type.caption, { color: c.textSecondary, fontSize: 11 }]}>yakında</Text>
+        <Svg style={StyleSheet.absoluteFill} width="100%" height="100%" pointerEvents="none">
+          <Defs>
+            <LinearGradient id={id} x1="0" y1="0" x2="1" y2="1">
+              <Stop offset="0" stopColor={accent} stopOpacity={expanded ? (dark ? 0.42 : 0.24) : dark ? 0.26 : 0.13} />
+              <Stop offset="1" stopColor={accent} stopOpacity={dark ? 0.03 : 0.01} />
+            </LinearGradient>
+          </Defs>
+          <Rect x="0" y="0" width="100%" height="100%" fill={`url(#${id})`} />
+        </Svg>
+        <View
+          style={[
+            styles.iconHalo,
+            {
+              backgroundColor: withAlpha(accent, dark ? 0.28 : 0.16),
+              shadowColor: accent,
+              borderColor: withAlpha(accent, 0.35),
+            },
+          ]}>
+          {section.icon}
+        </View>
+        <View style={styles.sectionText}>
+          <Text style={[Type.headline, { color: c.text }]} numberOfLines={1}>
+            {section.title}
+          </Text>
+          <Text style={[Type.subhead, { color: c.textSecondary, fontSize: 12 }]} numberOfLines={1}>
+            {section.subtitle}
+          </Text>
+        </View>
+        {count != null && (
+          <View style={[styles.countPill, { backgroundColor: withAlpha(accent, dark ? 0.3 : 0.14) }]}>
+            <Text style={[Type.caption, styles.changeText, { color: c.text }]}>{formatNumber(count, 0, 0)}</Text>
           </View>
         )}
+        <View style={[styles.chevron, { backgroundColor: expanded ? accent : withAlpha(accent, dark ? 0.22 : 0.12) }]}>
+          <Svg
+            width={12}
+            height={12}
+            viewBox="0 0 24 24"
+            style={{ transform: [{ rotate: expanded ? '90deg' : '0deg' }] }}>
+            <Path
+              d="M9 5 L16 12 L9 19"
+              stroke={expanded ? '#FFFFFF' : c.text}
+              strokeWidth={3}
+              fill="none"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </Svg>
+        </View>
       </Pressable>
     </View>
   );
@@ -916,22 +1208,98 @@ const styles = StyleSheet.create({
     paddingVertical: 0,
     height: 44,
   },
-  sectionRow: {
+  glow: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+  },
+  pulse: {
+    paddingTop: 4,
+    paddingBottom: 2,
+  },
+  pulseHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 16,
+    marginBottom: 8,
+  },
+  liveDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    shadowOpacity: 0.9,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 0 },
+  },
+  pulseRow: {
+    gap: 8,
+    paddingHorizontal: 12,
+  },
+  pulseChip: {
+    minWidth: 118,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: Radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    gap: 4,
+  },
+  pulseTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  pulseChange: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  sectionWrap: {
+    paddingHorizontal: 12,
+    paddingBottom: 4,
+  },
+  groupLabel: {
+    marginLeft: 6,
+    marginBottom: 8,
+  },
+  sectionCard: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    marginHorizontal: 8,
-    paddingHorizontal: 10,
+    paddingHorizontal: 12,
     paddingVertical: 12,
-    borderRadius: Radius.md,
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+    overflow: 'hidden',
   },
-  sectionTitle: {
+  iconHalo: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    shadowOpacity: 0.45,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 0 },
+  },
+  sectionText: {
     flex: 1,
+    minWidth: 0,
+    gap: 1,
   },
-  soon: {
+  countPill: {
     borderRadius: Radius.pill,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+  },
+  chevron: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   stockCard: {
     flexDirection: 'row',
