@@ -137,6 +137,12 @@ python3 -I scripts/fetch-crypto-sources.py /tmp/kripto
 python3 -I scripts/build-crypto-data.py /tmp/kripto/crypto.json > src/data/crypto.ts
 ```
 
+Logo (GENIUS) çizgileri Unbounded Black yazı tipinden üretilir (fontTools gerekir):
+
+```bash
+python3 -I scripts/build-logo.py node_modules/@expo-google-fonts/unbounded/900Black/Unbounded_900Black.ttf > src/components/genius-logo-paths.ts
+```
+
 ## Komutlar
 
 ```bash
