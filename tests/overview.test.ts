@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { OVERVIEW, OVERVIEW_KEYS, searchOverview } from '../src/lib/overview';
+import { COMPARE_LINKS, OVERVIEW, OVERVIEW_KEYS, searchLinks, searchOverview } from '../src/lib/overview';
 
 test('menüdeki Endeks ve Kurlar bölümleri', () => {
   assert.deepEqual(OVERVIEW_KEYS, ['index', 'rates']);
@@ -36,4 +36,21 @@ test('endeks ve kur araması', () => {
   assert.deepEqual(codes('try', 'rates'), ['Dolar', 'Euro']);
   assert.equal(searchOverview('', OVERVIEW.rates.items).length, 2);
   assert.deepEqual(codes('altın', 'index'), []);
+});
+
+test('Karşılaştır bölümü: Grafik sitesi', () => {
+  assert.equal(COMPARE_LINKS.title, 'Karşılaştır');
+  const [grafik] = COMPARE_LINKS.items;
+  assert.equal(grafik.code, 'Grafik');
+  assert.equal(grafik.url, 'https://2n86njp68z-sketch.github.io/Grafik/');
+  assert.match(grafik.logo, /^https:\/\/2n86njp68z-sketch\.github\.io\/Grafik\//);
+  assert.deepEqual(
+    searchLinks('grafik', COMPARE_LINKS.items).map((l) => l.code),
+    ['Grafik'],
+  );
+  assert.deepEqual(
+    searchLinks('temettü', COMPARE_LINKS.items).map((l) => l.code),
+    ['Grafik'],
+  );
+  assert.deepEqual(searchLinks('bitcoin', COMPARE_LINKS.items), []);
 });

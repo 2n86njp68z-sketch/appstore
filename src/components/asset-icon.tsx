@@ -278,6 +278,32 @@ export function IndexMark({ size }: { size: number }) {
   );
 }
 
+/** Karşılaştır bölümü simgesi: mor daire üstünde iki ayrı getiri çizgisi. */
+export function CompareMark({ size }: { size: number }) {
+  return (
+    <Round size={size} label="Karşılaştır">
+      <Rect x={0} y={0} width={100} height={100} fill="#7C5CFF" />
+      <Path
+        d="M22 70 L40 52 L54 60 L78 32"
+        stroke="#FFFFFF"
+        strokeWidth={8}
+        fill="none"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <Path
+        d="M22 78 L42 68 L58 72 L78 56"
+        stroke="#FFFFFF"
+        strokeOpacity={0.55}
+        strokeWidth={8}
+        fill="none"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Round>
+  );
+}
+
 /** TradingView'deki döviz çiftleri gibi: büyük bayrak ve sağ altta küçük ikinci bayrak. */
 export function PairIcon({ main, second, size }: { main: string; second: string; size: number }) {
   const c = useColors();

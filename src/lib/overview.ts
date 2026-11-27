@@ -79,3 +79,30 @@ export function searchOverview(query: string, items: readonly OverviewItem[]): O
   if (!q) return [...items];
   return items.filter((i) => foldForSearch(`${i.code} ${i.name}`).includes(q));
 }
+
+/** "Karşılaştır" bölümündeki bağlantılar: uygulama içi tarayıcıda açılır. */
+export interface LinkItem {
+  code: string;
+  name: string;
+  url: string;
+  /** Sitenin simgesi. */
+  logo: string;
+}
+
+export const COMPARE_LINKS: { title: string; items: readonly LinkItem[] } = {
+  title: 'Karşılaştır',
+  items: [
+    {
+      code: 'Grafik',
+      name: 'Temettü dahil getiri grafikleri, TL/USD, karşılaştırma',
+      url: 'https://2n86njp68z-sketch.github.io/Grafik/',
+      logo: 'https://2n86njp68z-sketch.github.io/Grafik/icons/apple-touch-icon.png',
+    },
+  ],
+};
+
+export function searchLinks(query: string, items: readonly LinkItem[]): LinkItem[] {
+  const q = foldForSearch(query);
+  if (!q) return [...items];
+  return items.filter((i) => foldForSearch(`${i.code} ${i.name}`).includes(q));
+}

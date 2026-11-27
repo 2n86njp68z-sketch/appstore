@@ -1,4 +1,5 @@
 import { router } from 'expo-router';
+import * as WebBrowser from 'expo-web-browser';
 import {
   createContext,
   memo,
@@ -29,7 +30,8 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle, Line, Path } from 'react-native-svg';
 
-import { AssetIcon, CategoryIcon, FlagIcon, IndexMark, PairIcon } from '@/components/asset-icon';
+import { AssetIcon, CategoryIcon, CompareMark, FlagIcon, IndexMark, PairIcon } from '@/components/asset-icon';
+import { CompanyLogo } from '@/components/company-logo';
 import { TrendIcon } from '@/components/trend-icon';
 import { pnlColor, pnlSoft, Radius, Type, useColors } from '@/constants/theme';
 import { usePortfolio } from '@/context/portfolio-context';
@@ -37,7 +39,15 @@ import { paletteFor } from '@/lib/donut';
 import { formatNumber, formatPct, formatPrice } from '@/lib/format';
 import { MARKETS, searchStocks, type MarketKey, type MarketStock } from '@/lib/markets';
 import { commodityInfo, displaySymbol } from '@/lib/assets';
-import { OVERVIEW, searchOverview, type OverviewItem, type OverviewKey } from '@/lib/overview';
+import {
+  COMPARE_LINKS,
+  OVERVIEW,
+  searchLinks,
+  searchOverview,
+  type LinkItem,
+  type OverviewItem,
+  type OverviewKey,
+} from '@/lib/overview';
 import { resolveAssetQuote } from '@/lib/portfolio';
 import { fetchAnyQuotes } from '@/lib/prices';
 import type { AssetKind, AssetQuote, RawQuote } from '@/lib/types';
@@ -152,7 +162,13 @@ interface OverviewRowItem {
   overview: OverviewItem;
 }
 
-type ListItem = StockItem | OverviewRowItem;
+/** Karşılaştır bölümündeki site bağlantısı. */
+interface LinkRowItem {
+  key: string;
+  link: LinkItem;
+}
+
+type ListItem = StockItem | OverviewRowItem | LinkRowItem;
 
 interface MarketSection {
   key: string;
@@ -166,8 +182,9 @@ interface MarketSection {
 }
 
 type SectionDef =
-  | { key: string; title: string; kind: AssetKind; market: MarketKey; overview?: undefined }
-  | { key: OverviewKey; title: string; overview: OverviewKey; kind?: undefined; market?: undefined };
+  | { key: string; title: string; kind: AssetKind; market: MarketKey; overview?: undefined; links?: undefined }
+  | { key: OverviewKey; title: string; overview: OverviewKey; kind?: undefined; market?: undefined; links?: undefined }
+  | { key: 'compare'; title: string; links: true; kind?: undefined; market?: undefined; overview?: undefined };
 
 const SECTION_DEFS: SectionDef[] = [
   // Türk bayraklılar, ABD bayraklılar alt alta; ardından emtia, kripto, endeksler ve kurlar.
@@ -180,6 +197,7 @@ const SECTION_DEFS: SectionDef[] = [
   { key: 'crypto', title: 'Kripto', kind: 'crypto', market: 'crypto' },
   { key: 'index', title: OVERVIEW.index.title, overview: 'index' },
   { key: 'rates', title: OVERVIEW.rates.title, overview: 'rates' },
+  { key: 'compare', title: COMPARE_LINKS.title, links: true },
 ];
 
 const MARKET_KEYS = SECTION_DEFS.flatMap((d) => (d.market ? [d.market] : []));
@@ -190,6 +208,8 @@ const OVERVIEW_ROWS = Object.fromEntries(
     OVERVIEW[k].items.map((o) => ({ key: `${k}:${o.quoteKey}`, overview: o })),
   ]),
 ) as Record<OverviewKey, OverviewRowItem[]>;
+
+const LINK_ROWS: LinkRowItem[] = COMPARE_LINKS.items.map((link) => ({ key: `link:${link.url}`, link }));
 
 function overviewIcon(key: OverviewKey, size: number) {
   return key === 'index' ? <IndexMark size={size} /> : <CategoryIcon kind="fx" size={size} />;
@@ -295,17 +315,31 @@ function MarketDrawer({ open, onClose }: { open: boolean; onClose: () => void })
         : null,
     [query, searching],
   );
+  const linkResults = useMemo(() => (searching ? searchLinks(query, COMPARE_LINKS.items) : null), [query, searching]);
   const noResults =
     results != null &&
     MARKET_KEYS.every((m) => results[m].length === 0) &&
     overviewResults != null &&
     overviewResults.index.length === 0 &&
-    overviewResults.rates.length === 0;
+    overviewResults.rates.length === 0 &&
+    linkResults != null &&
+    linkResults.length === 0;
 
   const sections: MarketSection[] = SECTION_DEFS.filter((d) => {
-    if (!results || !overviewResults) return true;
+    if (!results || !overviewResults || !linkResults) return true;
+    if (d.links) return linkResults.length > 0;
     return d.market ? results[d.market].length > 0 : overviewResults[d.overview].length > 0;
   }).map((d) => {
+    if (d.links) {
+      return {
+        key: d.key,
+        title: d.title,
+        available: true,
+        icon: <CompareMark size={30} />,
+        total: linkResults ? linkResults.length : LINK_ROWS.length,
+        data: linkResults ? LINK_ROWS.filter((r) => linkResults.includes(r.link)) : expanded === d.key ? LINK_ROWS : [],
+      };
+    }
     if (d.overview) {
       const found = overviewResults?.[d.overview];
       const rows = OVERVIEW_ROWS[d.overview];
@@ -494,6 +528,7 @@ function MarketDrawer({ open, onClose }: { open: boolean; onClose: () => void })
             />
           )}
           renderItem={({ item }: { item: ListItem }) => {
+            if ('link' in item) return <LinkRow item={item.link} />;
             if ('overview' in item) {
               return (
                 <OverviewRow item={item.overview} quote={allQuotes[item.overview.quoteKey]} onPress={openOverview} />
@@ -576,6 +611,45 @@ function SectionHeader({
     </View>
   );
 }
+
+/** Site bağlantısı: uygulama içi tarayıcıda (iOS'ta Safari penceresi) açılır. */
+const LinkRow = memo(function LinkRow({ item }: { item: LinkItem }) {
+  const c = useColors();
+  return (
+    <Pressable
+      onPress={() => {
+        void WebBrowser.openBrowserAsync(item.url);
+      }}
+      accessibilityRole="link"
+      accessibilityLabel={`${item.code}: ${item.name}`}
+      style={({ pressed }) => [
+        styles.stockCard,
+        { backgroundColor: c.card, borderColor: c.border },
+        pressed && { opacity: 0.6 },
+      ]}>
+      <View style={[styles.stockBar, { backgroundColor: '#7C5CFF' }]} />
+      <CompanyLogo logoUrl={item.logo} label={item.code} color="#7C5CFF" size={36} />
+      <View style={styles.stockMain}>
+        <Text style={[Type.headline, { color: c.text, fontSize: 15 }]} numberOfLines={1}>
+          {item.code}
+        </Text>
+        <Text style={[Type.subhead, { color: c.textSecondary, fontSize: 12 }]} numberOfLines={2}>
+          {item.name}
+        </Text>
+      </View>
+      <Svg width={20} height={20} viewBox="0 0 24 24" accessibilityLabel="Tarayıcıda açılır">
+        <Path
+          d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"
+          stroke={c.textSecondary}
+          strokeWidth={2.2}
+          fill="none"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </Svg>
+    </Pressable>
+  );
+});
 
 const OverviewRow = memo(function OverviewRow({
   item,
