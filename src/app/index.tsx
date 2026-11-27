@@ -19,6 +19,7 @@ import { AssetIcon, CategoryIcon } from '@/components/asset-icon';
 import { BenchmarkCard } from '@/components/benchmark-card';
 import { DonutChart } from '@/components/donut-chart';
 import { EmptyPortfolio } from '@/components/empty-portfolio';
+import { ValueChartCard } from '@/components/value-chart';
 import { DrawerButton } from '@/components/market-drawer';
 import { pnlColor, pnlSoft, Radius, Type, useColors } from '@/constants/theme';
 import { usePortfolio } from '@/context/portfolio-context';
@@ -56,6 +57,7 @@ export default function PortfolioScreen() {
     error,
     displayCurrency,
     cycleDisplayCurrency,
+    valueChart,
   } = usePortfolio();
   const [openKind, setOpenKind] = useState<AssetKind>();
   const [selectedAsset, setSelectedAsset] = useState<string>();
@@ -274,6 +276,10 @@ export default function PortfolioScreen() {
                 <Text style={[Type.bodyStrong, { color: c.tint, fontSize: 14 }]}>Ne alayım?</Text>
                 <Text style={[Type.subhead, { color: c.textSecondary, fontSize: 12 }]}>Hedef oranlarına göre</Text>
               </Pressable>
+            )}
+
+            {!openCat && valueChart && valueChart.dates.length > 1 && (
+              <ValueChartCard chart={valueChart} currency={cur} />
             )}
 
             {!openCat && <BenchmarkCard results={benchmarks} />}

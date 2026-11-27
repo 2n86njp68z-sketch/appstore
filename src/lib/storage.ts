@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import type { BenchSeries } from './benchmarks';
+import type { PriceHistory } from './history';
 import type { CorporateAction, DisplayCurrency, FxHistory, RawQuote, Transaction } from './types';
 
 /** Varlık anahtarına göre bedelsiz/temettü kayıtları ve ne zaman çekildikleri. */
@@ -12,6 +13,7 @@ const KEYS = {
   quotes: 'portfoy/quotes/v1',
   fxHistory: 'portfoy/fxHistory/v1',
   benchSeries: 'portfoy/benchSeries/v1',
+  priceHistory: 'portfoy/priceHistory/v1',
   corporateActions: 'portfoy/corporateActions/v1',
   targets: 'portfoy/targets/v1',
   displayCurrency: 'portfoy/displayCurrency/v1',
@@ -23,6 +25,7 @@ export interface StoredData {
   quotes: Record<string, RawQuote>;
   fxHistory: FxHistory;
   benchSeries: BenchSeries;
+  priceHistory: PriceHistory;
   corporateActions: StoredActions;
   /** Dengeleme hedef oranları (varlık anahtarı → %). */
   targets: Record<string, number>;
@@ -39,23 +42,34 @@ async function readJson<T>(key: string, fallback: T): Promise<T> {
 }
 
 export async function loadAll(): Promise<StoredData> {
-  const [transactions, manualPrices, quotes, fxHistory, displayCurrency, benchSeries, corporateActions, targets] =
-    await Promise.all([
-      readJson<Transaction[]>(KEYS.transactions, []),
-      readJson<Record<string, number>>(KEYS.manualPrices, {}),
-      readJson<Record<string, RawQuote>>(KEYS.quotes, {}),
-      readJson<FxHistory>(KEYS.fxHistory, {}),
-      readJson<DisplayCurrency>(KEYS.displayCurrency, 'TRY'),
-      readJson<BenchSeries>(KEYS.benchSeries, {}),
-      readJson<StoredActions>(KEYS.corporateActions, {}),
-      readJson<Record<string, number>>(KEYS.targets, {}),
-    ]);
+  const [
+    transactions,
+    manualPrices,
+    quotes,
+    fxHistory,
+    displayCurrency,
+    benchSeries,
+    corporateActions,
+    targets,
+    priceHistory,
+  ] = await Promise.all([
+    readJson<Transaction[]>(KEYS.transactions, []),
+    readJson<Record<string, number>>(KEYS.manualPrices, {}),
+    readJson<Record<string, RawQuote>>(KEYS.quotes, {}),
+    readJson<FxHistory>(KEYS.fxHistory, {}),
+    readJson<DisplayCurrency>(KEYS.displayCurrency, 'TRY'),
+    readJson<BenchSeries>(KEYS.benchSeries, {}),
+    readJson<StoredActions>(KEYS.corporateActions, {}),
+    readJson<Record<string, number>>(KEYS.targets, {}),
+    readJson<PriceHistory>(KEYS.priceHistory, {}),
+  ]);
   return {
     transactions: Array.isArray(transactions) ? transactions : [],
     manualPrices,
     quotes,
     fxHistory,
     benchSeries,
+    priceHistory,
     corporateActions,
     targets,
     displayCurrency: ['TRY', 'USD', 'EUR'].includes(displayCurrency) ? displayCurrency : 'TRY',
@@ -92,4 +106,8 @@ export function saveCorporateActions(actions: StoredActions) {
 
 export function saveTargets(targets: Record<string, number>) {
   return AsyncStorage.setItem(KEYS.targets, JSON.stringify(targets));
+}
+
+export function savePriceHistory(history: PriceHistory) {
+  return AsyncStorage.setItem(KEYS.priceHistory, JSON.stringify(history));
 }

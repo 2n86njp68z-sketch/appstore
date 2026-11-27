@@ -4,6 +4,8 @@ import { AppState, Platform } from 'react-native';
 import { assetKey, isManualPriced, quoteSymbolFor } from '@/lib/assets';
 import { makeBackup, mergeTransactions, type BackupData } from '@/lib/backup';
 import { BENCH_SYMBOLS, computeBenchmarks, type BenchmarkResult, type BenchSeries } from '@/lib/benchmarks';
+import { todayIso } from '@/lib/format';
+import { refreshPriceHistory, type PriceHistory } from '@/lib/history';
 import { computeHoldings, computeSummary, DISPLAY_CURRENCIES, FxRates, requiredQuoteSymbols } from '@/lib/portfolio';
 import {
   BIST100_TR_CODE,
@@ -23,6 +25,7 @@ import {
   saveDisplayCurrency,
   saveFxHistory,
   saveManualPrices,
+  savePriceHistory,
   saveQuotes,
   saveTargets,
   saveTransactions,
@@ -38,6 +41,7 @@ import type {
   RawQuote,
   Transaction,
 } from '@/lib/types';
+import { buildValueChart, type ValueChart } from '@/lib/value-chart';
 
 /** Uygulama öne geldiğinde fiyatlar bu süreden eskiyse yenilenir. */
 const STALE_MS = 2 * 60 * 1000;
@@ -199,6 +203,8 @@ interface PortfolioContextValue {
   ) => void;
   /** Bir gündeki dolar kuru (TL). */
   usdTryOn: (date: string) => number | undefined;
+  /** Portföy değeri grafiği (seçili para biriminde); işlem yoksa null. */
+  valueChart: ValueChart | null;
 }
 
 const PortfolioContext = createContext<PortfolioContextValue | null>(null);
@@ -219,6 +225,8 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
   const [benchSeries, setBenchSeries] = useState<BenchSeries>({});
   const [corporateActions, setCorporateActions] = useState<StoredActions>({});
   const [targets, setTargetsState] = useState<Record<string, number>>({});
+  const [priceHistory, setPriceHistory] = useState<PriceHistory>({});
+  const priceHistoryRef = useRef(priceHistory);
   const actionsRef = useRef(corporateActions);
   useEffect(() => {
     actionsRef.current = corporateActions;
@@ -282,6 +290,19 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
           setBenchSeries(bench);
           saveBenchSeries(bench).catch(() => {});
         }
+        // Portföy grafiği için varlıkların geçmiş fiyatları (yarım günde bir)
+        const ph = await refreshPriceHistory(
+          transactionsRef.current,
+          priceHistoryRef.current,
+          undefined,
+          undefined,
+          Platform.OS === 'web' || !!WEB_DATA_BASE,
+        ).catch(() => null);
+        if (ph) {
+          priceHistoryRef.current = ph;
+          setPriceHistory(ph);
+          savePriceHistory(ph).catch(() => {});
+        }
       } finally {
         setRefreshing(false);
         inFlight.current = null;
@@ -307,6 +328,8 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
       setCorporateActions(data.corporateActions);
       actionsRef.current = data.corporateActions;
       setTargetsState(data.targets);
+      setPriceHistory(data.priceHistory);
+      priceHistoryRef.current = data.priceHistory;
       setDisplayCurrency(data.displayCurrency);
       const times = Object.values(data.quotes).map((q) => q.fetchedAt);
       if (times.length) setLastUpdated(Math.max(...times));
@@ -444,6 +467,22 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
     () => Object.fromEntries(Object.entries(corporateActions).map(([k, v]) => [k, v.actions])),
     [corporateActions],
   );
+  const valueChart = useMemo(
+    () =>
+      buildValueChart({
+        transactions,
+        raw: quotes,
+        manualPrices,
+        fxHistory,
+        priceHistory,
+        actionsByKey,
+        bench: benchSeries,
+        currency: displayCurrency,
+        today: todayIso(),
+      }),
+    [transactions, quotes, manualPrices, fxHistory, priceHistory, actionsByKey, benchSeries, displayCurrency],
+  );
+
   const holdings = useMemo(
     () => computeHoldings(transactions, quotes, manualPrices, fxHistory, actionsByKey),
     [transactions, quotes, manualPrices, fxHistory, actionsByKey],
@@ -487,6 +526,7 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
       setTargets,
       importTransactions,
       usdTryOn,
+      valueChart,
     }),
     [
       manualPrices,
@@ -497,6 +537,7 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
       setTargets,
       importTransactions,
       usdTryOn,
+      valueChart,
       displayCurrency,
       cycleDisplayCurrency,
       ready,

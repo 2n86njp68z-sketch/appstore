@@ -8,7 +8,7 @@ import type { CorporateAction, FxSeries, RawQuote } from './types';
 const HOSTS = ['https://query1.finance.yahoo.com', 'https://query2.finance.yahoo.com'];
 const TIMEOUT_MS = 10_000;
 
-type FetchLike = (
+export type FetchLike = (
   url: string,
   init?: { signal?: AbortSignal; headers?: Record<string, string>; method?: string; body?: string },
 ) => Promise<{

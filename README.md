@@ -44,6 +44,13 @@ Expo (React Native) ile yazıldı. Geliştirmek ve App Store'a göndermek için 
   - Fiyatlar yalnız ekranda görünen kalemler için 20'li gruplar halinde çekilir.
   - Hisseye dokununca güncel fiyatı dolu işlem ekleme ekranı açılır. Eklenen hisse portföyde de logosuyla görünür.
 - **Kâr/zarar:** Halkanın altındaki ince kartta yan yana "Bugün" (günlük) ve "Toplam" kâr/zarar, tutar ve yüzde olarak; yanında "Yıllık" getiri.
+- **Portföy değeri grafiği (ana sayfa):** Portföyün zaman içindeki değeri, seçili para biriminde (TL, dolar, euro). Her gün elde olan miktar × o günün kapanışı; son nokta güncel fiyat (ana sayfadaki toplamla aynı).
+  - Dönem: 1A, 3A, 6A, 1Y, Tümü. Grafikte parmağını gezdirince o günün tarihi, değeri ve kârı (değer − yatırılan) yazar; açık çizgilerin o günkü değerleri lejantta görünür.
+  - Çizgiler: Portföy, Yatırılan (alışlar − satışlar, işlem günündeki kurla; kesikli gri) ve dokunarak açılan ölçütler: BIST 100, S&P 500, Enflasyon (aynı paralar aynı günlerde bunlara yatırılsaydı / enflasyon kadar artsaydı).
+  - Geçmiş fiyatlar: hisse, ETF, döviz ve emtia Yahoo'dan; kripto CoinGecko'dan (son 365 gün); TEFAS ve BES fonları TEFAS'tan (site bir istekte en çok 1 ay verdiği için aylık parçalarla, sonra yalnız yeni günler; en çok 8 fon). Yarım günde bir yenilenir, telefonda saklanır.
+  - Geçmişi olmayanlar (eurobond, elle fiyatlananlar, CoinGecko'nun 365 günü öncesi) son işlem fiyatıyla çizilir; kartın altında hangileri olduğu yazar. Alınan nakit temettüler çizgiye dahil değildir.
+  - Renkler renk körlüğü denetiminden geçmiş kategorik paletten; her çizginin değeri lejantta yazılı olduğu için renge bağlı kalmaz.
+  - Web sürümünde tarayıcı Yahoo ve TEFAS'a erişemediği için hisse ve fonlar işlem fiyatlarıyla çizilir (kripto ve ölçütler tam); grafik telefonda tam görünür.
 - **Yıllık getiri (XIRR):** Her alış, satış ve temettü kendi tarihiyle hesaba girer; bugünkü değer bugünkü akış sayılır. Çıkan oran mevduat faizi gibi yıllık oranlarla kıyaslanabilir.
   - Ana sayfadaki "Yıllık" hücresi portföyün tamamı içindir (satılıp kapanan varlıklar dahil); dokununca açıklaması çıkar. Seçili para biriminde (TL, dolar, euro) hesaplanır.
   - Varlık detayında "Para birimine göre" kartında her para birimi için ayrı yazar.
