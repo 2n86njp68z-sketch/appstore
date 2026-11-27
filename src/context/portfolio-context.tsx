@@ -45,6 +45,8 @@ import type {
   Transaction,
 } from '@/lib/types';
 import { buildValueChart, type ValueChart } from '@/lib/value-chart';
+import { syncWidget } from '@/lib/widget-sync';
+import { buildWidgetProps } from '@/widgets/portfolio-widget-props';
 
 /** Uygulama öne geldiğinde fiyatlar bu süreden eskiyse yenilenir. */
 const STALE_MS = 2 * 60 * 1000;
@@ -567,6 +569,12 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
       ),
     [transactions, summary, quotes, fxHistory, benchSeries],
   );
+
+  // Ana ekran widget'ı (yalnız iPhone derlemesinde) son değerlerle güncellenir
+  useEffect(() => {
+    if (!ready) return;
+    syncWidget(buildWidgetProps(summary, holdings, displayCurrency, lastUpdated)).catch(() => {});
+  }, [ready, summary, holdings, displayCurrency, lastUpdated]);
 
   const value = useMemo<PortfolioContextValue>(
     () => ({

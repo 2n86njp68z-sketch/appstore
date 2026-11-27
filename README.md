@@ -57,6 +57,9 @@ Expo (React Native) ile yazıldı. Geliştirmek ve App Store'a göndermek için 
   - Uygulama açıkken her fiyat yenilemesinde kontrol edilir (yalnız yeni gelen fiyatlarla). Kapalıyken arka plan görevi (expo-background-task) fiyatları çekip kontrol eder; ne zaman çalışacağına telefon karar verir (en az 15 dakikada bir, iPhone'da çoğu zaman daha seyrek), yani anlık değildir. Arka plan görevi geliştirme/App Store derlemesinde çalışır; Expo Go'da alarmlar uygulama açıkken kontrol edilir.
   - İlk alarmda bildirim izni istenir; reddedildiyse alarmlar ekranından Ayarlar'a gidilir. Web sürümünde bildirim yok, alarm sayfa açıkken uyarı olarak çıkar.
   - Alarmlar yedeğe girer.
+- **Ana ekran widget'ı (iPhone):** Expo'nun resmi widget modülüyle (expo-widgets, SwiftUI). Üç boyut: küçük (toplam değer, bugün ve toplam kâr/zarar, yıllık getiri, güncellenme saati), orta (yanında en büyük üç varlık ve günlük değişimleri) ve kilit ekranı (değer ve günlük %). Dokununca uygulama açılır.
+  - Seçili para biriminde (TL, dolar, euro) gösterir. Uygulama fiyatları her yenilediğinde widget hazır metinlerle güncellenir; widget kendisi internete çıkmaz.
+  - Widget, App Group (group.com.portfoytakip.app) ve ayrı bir uzantı (com.portfoytakip.app.widgets) gerektirdiği için Expo Go'da görünmez; EAS ile alınan geliştirme ya da App Store derlemesinde çıkar (Apple Developer hesabı gerekir). Ayar app.json'daki expo-widgets eklentisinde; kod src/widgets/.
 - **Yıllık getiri (XIRR):** Her alış, satış ve temettü kendi tarihiyle hesaba girer; bugünkü değer bugünkü akış sayılır. Çıkan oran mevduat faizi gibi yıllık oranlarla kıyaslanabilir.
   - Ana sayfadaki "Yıllık" hücresi portföyün tamamı içindir (satılıp kapanan varlıklar dahil); dokununca açıklaması çıkar. Seçili para biriminde (TL, dolar, euro) hesaplanır.
   - Varlık detayında "Para birimine göre" kartında her para birimi için ayrı yazar.

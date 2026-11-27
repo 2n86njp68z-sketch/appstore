@@ -39,7 +39,26 @@
       "expo-font",
       "expo-web-browser",
       "expo-background-task",
-      "expo-notifications"
+      "expo-notifications",
+      [
+        "expo-widgets",
+        {
+          "bundleIdentifier": "com.portfoytakip.app.widgets",
+          "groupIdentifier": "group.com.portfoytakip.app",
+          "widgets": [
+            {
+              "name": "PortfolioWidget",
+              "displayName": "GENIUS Portföy",
+              "description": "Portföy değeri, günlük ve toplam kâr/zarar",
+              "supportedFamilies": [
+                "systemSmall",
+                "systemMedium",
+                "accessoryRectangular"
+              ]
+            }
+          ]
+        }
+      ]
     ],
     "scheme": "portfoytakip"
   }
