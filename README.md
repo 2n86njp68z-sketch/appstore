@@ -87,6 +87,7 @@ Expo (React Native) ile yazıldı. Geliştirmek ve App Store'a göndermek için 
   - Karşılaştırma kartında portföy değerine alınan temettüler de eklenir.
 - **Fiyatlar:** Otomatik çekilir. Aşağı çekince ve uygulama öne gelince yenilenir.
 - **Kayıt:** Veriler yalnızca telefonda tutulur. Hesap ya da sunucu gerekmez.
+- **Hakkında ve gizlilik (Ayarlar → Hakkında):** Sürüm, "yatırım tavsiyesi değildir" uyarısı, kullanılan veri kaynakları (dokununca sitesi açılır), gizlilik politikası, destek ve web sürümü bağlantıları.
 - **Yedekleme (Ayarlar → Yedekleme):** İşlemler ve elle girilen fiyatlar tek bir dosya olarak dışa aktarılır (telefonda paylaşma menüsü: Dosyalar'a/iCloud Drive'a kaydet, AirDrop, mesaj; web'de indirme). Yedekten geri yükleme mevcut işlemlerin yerine geçer; "Yedeği ekle" yalnız eksik işlemleri ekler.
 - **Birden fazla portföy (Ayarlar → Araçlar → Portföyler):** Hesapları ayrı tutmak için (ör. uzun vade, BES, çocuk hesabı). Portföy eklenir, adı değiştirilir, silinir (Ana portföy silinemez; silinen portföyün işlemleri de silinir).
   - İki ya da daha fazla portföy olunca ana sayfanın üstünde "Tümü · Ana portföy · …" seçici çıkar. Halka, kâr/zarar, yıllık getiri, grafik, karşılaştırma ve widget seçili portföye (ya da hepsine birlikte) göre hesaplanır.
@@ -127,11 +128,22 @@ src/
     _layout.tsx         Gezinme ve tema
     index.tsx           Ana sayfa: halka grafik + liste
     add.tsx             İşlem ekleme
-    asset/[key].tsx     Varlık detayı ve işlem geçmişi
+    asset/[key].tsx     Varlık detayı, işlem geçmişi ve fiyat alarmı
+    settings.tsx        Ayarlar: araçlar, yedekleme, hakkında
+    rebalance.tsx       Portföy dengeleme ("Ne alayım?")
+    portfolios.tsx      Portföyler (ekle, adını değiştir, sil)
+    alerts.tsx          Fiyat alarmları
+    import-scriptable.tsx  Scriptable'dan aktarma
+    about.tsx, privacy.tsx Hakkında ve gizlilik politikası
   constants/theme.ts    Renkler, yazı tipi ve yazı stilleri
+  content/legal.ts      Gizlilik, yasal uyarı ve veri kaynakları metni (uygulama + web)
+  widgets/              iPhone ana ekran widget'ı (expo-widgets)
   components/
     market-drawer.tsx   Sol menü: arama, bölümler, piyasa listeleri
     benchmark-card.tsx  Ana sayfadaki karşılaştırma kartı
+    value-chart.tsx     Portföy değeri grafiği
+    price-alerts.tsx    Alarm satırı ve varlık sayfasındaki alarm bölümü
+    portfolio-switcher.tsx  Ana sayfadaki portföy seçici
     company-logo.tsx    Şirket logosu (sitesinden), yoksa harf rozeti
     donut-chart.tsx     Dokunulabilir halka grafik
     asset-icon.tsx      Bayraklar, külçeler ve harf rozetleri (SVG)
@@ -142,6 +154,14 @@ src/
     markets.ts          Piyasalar, hisse arama ve logo adresleri
     portfolio.ts        Hesaplamalar (ortalama maliyet, K/Z, TL/USD/EUR toplamlar)
     benchmarks.ts       BIST 100, S&P 500 ve enflasyon karşılaştırması
+    xirr.ts             Yıllık getiri (XIRR)
+    rebalance.ts        Dengeleme hesapları
+    value-chart.ts, history.ts  Portföy değeri serisi ve geçmiş fiyatlar
+    alerts.ts, alert-task.ts    Fiyat alarmları, bildirim ve arka plan görevi
+    portfolios.ts       Birden fazla portföy
+    corporate.ts        Bedelsiz/bölünme ve temettü
+    backup.ts, backup-io.ts     Yedek dosyası
+    scriptable-import.ts        Scriptable verilerini aktarma
     donut.ts            Grafik dilimleri, renkler ve dokunma hesabı
     prices.ts           Fiyat, geçmiş kur ve TÜFE çekme (Yahoo Finance, CoinGecko, OECD)
     format.ts           Türkçe sayı/tarih biçimleri
@@ -222,14 +242,32 @@ npm run format       # kodu biçimlendir
 
 Telefon ile bilgisayar aynı Wi-Fi'da değilse `npx expo start --tunnel` kullan.
 
-## App Store'a gönderme (sonraki adım)
+## App Store'a gönderme
 
-1. [Apple Developer Program](https://developer.apple.com/programs/)'a kaydol (yıllık 99 $).
-2. [expo.dev](https://expo.dev) üzerinde ücretsiz hesap aç.
-3. iOS sürümünü Expo'nun bulut sunucularında derle: `npx eas-cli@latest build --platform ios`. Sertifikaları EAS otomatik ayarlar.
-4. App Store Connect'e gönder: `npx eas-cli@latest submit --platform ios`. Önce TestFlight'ta dene, sonra incelemeye gönder.
+Uygulama tarafı hazır: gizlilik politikası, yasal uyarı, veri kaynakları, Apple'ın istediği gizlilik bildirimi (privacy manifest) ve EAS derleme ayarları projede. Kalan adımlar Apple hesabı gerektirdiği için senin:
 
-Göndermeden önce `app.json` içindeki `ios.bundleIdentifier` değerini (şu an `com.portfoytakip.app`) kendine özel bir değerle değiştir.
+1. [Apple Developer Program](https://developer.apple.com/programs/)'a kaydol (yıllık 99 $) ve [expo.dev](https://expo.dev)'de ücretsiz hesap aç.
+2. `app.json` içindeki `ios.bundleIdentifier` (şu an `com.portfoytakip.app`) ve widget eklentisindeki `bundleIdentifier` / `groupIdentifier` değerlerini kendine özel yap (ör. `com.adin.genius`, `com.adin.genius.widgets`, `group.com.adin.genius`). Üçü aynı kökten olmalı.
+3. Telefonda deneme derlemesi (widget, arka plan alarmı ve bildirimler dahil her şey çalışır): `npx eas-cli@latest build --platform ios --profile development`. Çıkan bağlantıdan iPhone'a kurulur; geliştirme sunucusu `npx expo start` ile açılır.
+4. App Store derlemesi: `npx eas-cli@latest build --platform ios --profile production` (sürüm numarası EAS'ta kendiliğinden artar; sertifikaları ve App Group'u EAS ayarlar).
+5. Gönder: `npx eas-cli@latest submit --platform ios`. Önce TestFlight'ta dene, sonra incelemeye gönder.
+
+**App Store Connect'te doldurulacaklar:**
+
+| Alan | Değer |
+| --- | --- |
+| Kategori | Finans (Finance) |
+| Gizlilik politikası URL'si | https://2n86njp68z-sketch.github.io/appstore/privacy.html |
+| Destek URL'si | https://2n86njp68z-sketch.github.io/appstore/support.html |
+| Uygulama gizliliği (App Privacy) | "Data Not Collected" (veri toplanmıyor): hesap, analitik, reklam ve izleme yok; veriler cihazda |
+| Şifreleme (Export Compliance) | Standart dışı şifreleme yok (`usesNonExemptEncryption: false` app.json'da) |
+| Yaş sınırı | 4+ (kumar, kullanıcı içeriği vb. yok) |
+| İnceleme notu | "Hesap ya da giriş gerekmez. Fiyatlar herkese açık kaynaklardan (Yahoo Finance, CoinGecko, TEFAS…) çekilir; uygulama alım-satım yaptırmaz, yalnızca kullanıcının girdiği işlemleri takip eder." |
+
+- Ekran görüntüleri: 6,9" (1320×2868) ve 6,5" (1284×2778) iPhone boyutları istenir; geliştirme derlemesinden ya da simülatörden alınabilir.
+- Gizlilik ve destek sayfaları `src/content/legal.ts`'teki metinden üretilir (`scripts/build-legal-html.ts`); web sürümüyle birlikte GitHub Pages'e yayınlanır ve uygulamada Ayarlar → Hakkında / Gizlilik politikası'nda görünür. Metni değiştirince ikisi birlikte güncellenir.
+- "Yatırım tavsiyesi değildir" uyarısı: Hakkında ekranında, dengeleme ekranının altında ve ana sayfanın en altında.
+- Gizlilik bildirimi (`ios.privacyManifests`): uygulamanın kullandığı sistem API'leri (UserDefaults, dosya zamanları, açılış süresi, disk alanı) Apple'ın onaylı gerekçeleriyle bildirildi; veri toplama ve izleme yok.
 
 ## Bilinen sınırlamalar
 

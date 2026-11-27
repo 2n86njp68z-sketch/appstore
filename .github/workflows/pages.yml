@@ -61,6 +61,8 @@ jobs:
           cp -r data site/data
           # Uygulama içi sayfalar (ör. /appstore/add) doğrudan açılınca da uygulama yüklensin
           cp site/index.html site/404.html
+          # Gizlilik ve destek sayfaları (App Store Connect bağlantıları)
+          npx tsx scripts/build-legal-html.ts site
           # _expo klasörü Jekyll'e takılmasın
           touch site/.nojekyll
       - name: gh-pages branch'ine yaz

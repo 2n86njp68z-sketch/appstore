@@ -126,6 +126,25 @@ export default function SettingsScreen() {
           Veriler yalnızca bu cihazda duruyor. Uygulamayı silersen ya da telefon değiştirirsen kaybolmaması için ara
           sıra yedek al.
         </Text>
+
+        <Text style={[Type.overline, styles.section, { color: c.textSecondary }]}>HAKKINDA</Text>
+        <View style={[settingsStyles.card, { backgroundColor: c.card }]}>
+          <SettingsRow
+            icon={<LineIcon d={ICONS.info} />}
+            color="#6366F1"
+            title="Hakkında"
+            subtitle="Sürüm, veri kaynakları, yatırım tavsiyesi değildir uyarısı"
+            onPress={() => router.push('/about')}
+          />
+          <SettingsRow
+            icon={<LineIcon d={ICONS.shield} />}
+            color="#10B981"
+            title="Gizlilik politikası"
+            subtitle="Hesap yok, veriler yalnızca cihazında"
+            onPress={() => router.push('/privacy')}
+            last
+          />
+        </View>
       </ScrollView>
     </>
   );

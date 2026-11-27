@@ -281,6 +281,10 @@ export default function RebalanceScreen() {
             )}
           </>
         )}
+        <Text style={[Type.subhead, styles.disclaimer, { color: c.textTertiary }]}>
+          Öneriler girdiğin hedef oranlara göre yapılan matematiksel hesaptır; yatırım tavsiyesi değildir. İşlem öncesi
+          fiyatları ve komisyonu aracı kurumunda kontrol et.
+        </Text>
       </ScrollView>
     </>
   );
@@ -379,4 +383,5 @@ const styles = StyleSheet.create({
   badge: { borderRadius: 7, paddingHorizontal: 7, paddingVertical: 3, minWidth: 40, alignItems: 'center' },
   summary: { borderRadius: Radius.lg, paddingHorizontal: 14, paddingVertical: 8, marginTop: 10 },
   summaryLine: { flexDirection: 'row', alignItems: 'center', paddingVertical: 5, gap: 8 },
+  disclaimer: { fontSize: 11.5, lineHeight: 16, marginTop: 18, paddingHorizontal: 4 },
 });

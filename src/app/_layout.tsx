@@ -80,6 +80,8 @@ export default function RootLayout() {
             <Stack.Screen name="import-scriptable" options={{ title: "Scriptable'dan aktar" }} />
             <Stack.Screen name="alerts" options={{ title: 'Fiyat alarmları' }} />
             <Stack.Screen name="portfolios" options={{ title: 'Portföyler' }} />
+            <Stack.Screen name="about" options={{ title: 'Hakkında' }} />
+            <Stack.Screen name="privacy" options={{ title: 'Gizlilik politikası' }} />
           </Stack>
         </MarketDrawerProvider>
         <StatusBar style="auto" />
