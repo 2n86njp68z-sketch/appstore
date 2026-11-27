@@ -16,8 +16,8 @@ import {
 import { AssetIcon, CategoryIcon } from '@/components/asset-icon';
 import { BenchmarkCard } from '@/components/benchmark-card';
 import { DonutChart } from '@/components/donut-chart';
+import { EmptyPortfolio } from '@/components/empty-portfolio';
 import { DrawerButton } from '@/components/market-drawer';
-import { PrimaryButton } from '@/components/ui';
 import { pnlColor, pnlSoft, Radius, Type, useColors } from '@/constants/theme';
 import { usePortfolio } from '@/context/portfolio-context';
 import { displaySymbol, kindInfo, quantityUnit } from '@/lib/assets';
@@ -148,7 +148,7 @@ export default function PortfolioScreen() {
         {!ready ? (
           <ActivityIndicator style={{ marginTop: 48 }} />
         ) : holdings.length === 0 ? (
-          <EmptyState />
+          <EmptyPortfolio />
         ) : (
           <>
             {(error || totals.incomplete) && (
@@ -455,24 +455,6 @@ function ClosedRow({ holding: h, currency, last }: { holding: Holding; currency:
   );
 }
 
-function EmptyState() {
-  const c = useColors();
-  return (
-    <View style={styles.empty}>
-      <View style={[styles.emptyBadge, { backgroundColor: c.tintSoft }]}>
-        <Text style={styles.emptyIcon}>📈</Text>
-      </View>
-      <Text style={[Type.title, { color: c.text, fontSize: 24 }]}>Portföyün boş</Text>
-      <Text style={[Type.body, styles.emptyText, { color: c.textSecondary }]}>
-        Hisse, kripto, döviz veya emtia alımlarını ekle; güncel değerini ve kâr/zararını anlık takip et.
-      </Text>
-      <View style={{ alignSelf: 'stretch', marginTop: 12 }}>
-        <PrimaryButton label="İlk işlemini ekle" onPress={() => router.push('/add')} />
-      </View>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   content: {
     paddingHorizontal: 16,
@@ -625,26 +607,5 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 28,
     lineHeight: 18,
-  },
-  empty: {
-    alignItems: 'center',
-    paddingTop: 56,
-    paddingHorizontal: 16,
-    gap: 10,
-  },
-  emptyBadge: {
-    width: 88,
-    height: 88,
-    borderRadius: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 6,
-  },
-  emptyIcon: {
-    fontSize: 40,
-  },
-  emptyText: {
-    textAlign: 'center',
-    lineHeight: 22,
   },
 });
