@@ -78,6 +78,12 @@ Expo (React Native) ile yazıldı. Geliştirmek ve App Store'a göndermek için 
   - Nakit çek: istenen tutar, kalan portföy hedefe en yakın kalacak şekilde fazlası olanlardan satılır.
   - Her varlık kendi alım biriminin katlarıyla önerilir (hisse/fon 1 lot, kripto 0,0001, gram altın 0,1 gr, eurobond 1.000 nominal). Her satırda işlem tutarı ve oranın önce → sonra (hedef) değeri yazar.
   - "Bu işlemleri portföye ekle" ile öneriler güncel fiyattan bugünün tarihiyle işlem olarak eklenir.
+- **Scriptable'dan aktarma (Ayarlar → Araçlar):** Scriptable'daki "Ne Alayım?" ve "USD Getiri" scriptlerinin verileri GENIUS'a taşınır; scriptlere dokunulmaz.
+  - "Scripti kopyala" ile küçük bir aktarma scripti panoya kopyalanır. Scriptable'da yeni scripte yapıştırıp çalıştırınca ne_alayim.json, lot_log.json ve usd_getiri.json tek dosyada toplanır ve Dosyalar'a (iCloud Drive) kaydedilir. GENIUS'ta "Dosyayı seç" ile bu dosya (ya da üç dosyanın kendisi) seçilir.
+  - İşlemler: USD Getiri'nin kaydettiği her alım/satım kendi zamanı ve fiyatıyla; onun henüz işlemediği lot_log kayıtları farklarıyla; Ne Alayım'daki güncel lotlarla kalan fark son bilinen fiyatla. Takibin başladığı gün eldeki lotlar o günün fiyatıyla alınmış sayılır (USD Getiri'deki gibi).
+  - Bedelsizler USD Getiri'nin bölünme kayıtlarıyla ayıklanır (alış sayılmaz); GENIUS bedelsiz ve temettüyü kendisi işler.
+  - ABD hisseleri ABD Market'e, ETF'ler ABD ETF'e, BES fonları BES'e, "ALTIN" (Tether Gold) kripto XAUT'a (dolar fiyatıyla) aktarılır.
+  - Ne Alayım'ın BIST + altın hedef oranları "Ne alayım?" ekranına alınabilir. Önizlemede işlem sayısı, tarih aralığı ve notlar görünür; "Portföye ekle" ya da "Portföyün yerine koy" seçilir. Aynı dosya tekrar eklenirse işlemler çift yazılmaz.
 - **Görünüm:** Telefonun ayarına göre gündüz beyaz, gece siyah. Yazı tipi Manrope (₺ ve Türkçe harf destekli).
 
 ## Web sürümü (link)

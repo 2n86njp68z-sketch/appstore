@@ -4,7 +4,7 @@ import { AppState, Platform } from 'react-native';
 import { assetKey, isManualPriced, quoteSymbolFor } from '@/lib/assets';
 import { makeBackup, mergeTransactions, type BackupData } from '@/lib/backup';
 import { BENCH_SYMBOLS, computeBenchmarks, type BenchmarkResult, type BenchSeries } from '@/lib/benchmarks';
-import { computeHoldings, computeSummary, DISPLAY_CURRENCIES, requiredQuoteSymbols } from '@/lib/portfolio';
+import { computeHoldings, computeSummary, DISPLAY_CURRENCIES, FxRates, requiredQuoteSymbols } from '@/lib/portfolio';
 import {
   BIST100_TR_CODE,
   fetchAnyQuotes,
@@ -191,6 +191,14 @@ interface PortfolioContextValue {
   /** Dengeleme hedef oranları (varlık anahtarı → %). */
   targets: Record<string, number>;
   setTargets: (targets: Record<string, number>) => void;
+  /** İşlemleri topluca ekler ("merge": aynı kimlikliler atlanır) ya da yerine koyar; hedefler verilirse onlar da. */
+  importTransactions: (
+    transactions: Transaction[],
+    mode: 'replace' | 'merge',
+    targets?: Record<string, number>,
+  ) => void;
+  /** Bir gündeki dolar kuru (TL). */
+  usdTryOn: (date: string) => number | undefined;
 }
 
 const PortfolioContext = createContext<PortfolioContextValue | null>(null);
@@ -378,6 +386,23 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
   );
 
   /** Yedekten geri yükler: "replace" mevcut işlemlerin yerine koyar, "merge" eksik olanları ekler. */
+  const importTransactions = useCallback(
+    (incoming: Transaction[], mode: 'replace' | 'merge', newTargets?: Record<string, number>) => {
+      const next = mode === 'replace' ? incoming : mergeTransactions(transactionsRef.current, incoming);
+      transactionsRef.current = next;
+      setTransactions(next);
+      saveTransactions(next).catch(() => {});
+      if (newTargets && Object.keys(newTargets).length) {
+        setTargetsState(newTargets);
+        saveTargets(newTargets).catch(() => {});
+      }
+      refresh();
+    },
+    [refresh],
+  );
+
+  const usdTryOn = useCallback((date: string) => new FxRates(quotes, fxHistory).on('USD', date), [quotes, fxHistory]);
+
   const importBackup = useCallback(
     (data: BackupData, mode: 'replace' | 'merge') => {
       const next =
@@ -460,6 +485,8 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
       importBackup,
       targets,
       setTargets,
+      importTransactions,
+      usdTryOn,
     }),
     [
       manualPrices,
@@ -468,6 +495,8 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
       importBackup,
       targets,
       setTargets,
+      importTransactions,
+      usdTryOn,
       displayCurrency,
       cycleDisplayCurrency,
       ready,

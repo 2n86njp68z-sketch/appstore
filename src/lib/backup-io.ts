@@ -44,3 +44,22 @@ export async function pickBackupFile(): Promise<string | null> {
   }
   return new File(asset.uri).text();
 }
+
+/** Birden çok JSON dosyası seçtirir (Scriptable aktarımı); vazgeçerse null. */
+export async function pickJsonFiles(): Promise<string[] | null> {
+  const res = await DocumentPicker.getDocumentAsync({
+    type: ['application/json', 'text/plain', '*/*'],
+    copyToCacheDirectory: true,
+    multiple: true,
+  });
+  if (res.canceled || !res.assets?.length) return null;
+  return Promise.all(
+    res.assets.map(async (asset) => {
+      if (Platform.OS === 'web') {
+        if (asset.file) return asset.file.text();
+        return (await fetch(asset.uri)).text();
+      }
+      return new File(asset.uri).text();
+    }),
+  );
+}

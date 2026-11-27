@@ -75,6 +75,7 @@ export default function RootLayout() {
             <Stack.Screen name="asset/[key]" options={{ title: '' }} />
             <Stack.Screen name="settings" options={{ title: 'Ayarlar' }} />
             <Stack.Screen name="rebalance" options={{ title: 'Ne alayım?' }} />
+            <Stack.Screen name="import-scriptable" options={{ title: "Scriptable'dan aktar" }} />
           </Stack>
         </MarketDrawerProvider>
         <StatusBar style="auto" />

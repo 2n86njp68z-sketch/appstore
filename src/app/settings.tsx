@@ -72,6 +72,13 @@ export default function SettingsScreen() {
             title="Portföy dengeleme (Ne alayım?)"
             subtitle="Hedef oranlarına göre nakit ekle, dengele ya da nakit çek önerileri"
             onPress={() => router.push('/rebalance')}
+          />
+          <SettingsRow
+            icon={<LineIcon d={ICONS.import} />}
+            color="#F59E0B"
+            title="Scriptable'dan aktar"
+            subtitle="Ne Alayım ve USD Getiri'deki lotlar, alım-satım geçmişi ve hedef oranlar"
+            onPress={() => router.push('/import-scriptable')}
             last
           />
         </View>
