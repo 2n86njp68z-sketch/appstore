@@ -5,7 +5,13 @@ import { quoteSymbolFor } from '../src/lib/assets';
 import { computeBenchmarks, simulate, type BenchSeries } from '../src/lib/benchmarks';
 import { MARKETS, stockInfo } from '../src/lib/markets';
 import { FxRates } from '../src/lib/portfolio';
-import { fetchTurkeyCpi, parseOecdCpiCsv } from '../src/lib/prices';
+import {
+  fetchBistIndex,
+  fetchTurkeyCpi,
+  parseBistIndexCurrent,
+  parseBistIndexHistory,
+  parseOecdCpiCsv,
+} from '../src/lib/prices';
 import type { FxHistory, FxSeries, RawQuote, Transaction } from '../src/lib/types';
 
 const close = (a: number, b: number, eps = 1e-6) => assert.ok(Math.abs(a - b) < eps, `${a} ≈ ${b}`);
@@ -154,4 +160,82 @@ test('ABD ETF listesi: binlerce fon, Yahoo sembolü, ihraççı sitesi', () => {
   assert.deepEqual(MARKETS.etf.quoteKeys('SPY'), ['SPY']);
   assert.equal(quoteSymbolFor('etf', 'QQQ'), 'QQQ');
   assert.equal(MARKETS.etf.currencyOf('SPY'), 'USD');
+});
+
+test('BIST 100 getiri endeksi varsa ve güncelse o kullanılır, yoksa fiyat endeksi', () => {
+  const txs = [tx({ quantity: 10, price: 100, date: '2026-01-05' })];
+  const XU100TR = series({ '2026-01-02': 20000, '2026-01-05': 20000, '2026-11-26': 25000 });
+  const withTr = computeBenchmarks(txs, 1500, raw, fxHistory, { ...bench, XU100TR }, '2026-11-27');
+  const b = withTr.find((r) => r.key === 'bist100')!;
+  assert.equal(b.variant, 'total');
+  close(b.value, (1000 / 20000) * 25000);
+
+  // Seri eskimiş (10 günden uzun güncellenmemiş) → fiyat endeksi
+  const old = computeBenchmarks(txs, 1500, raw, fxHistory, { ...bench, XU100TR }, '2026-12-20');
+  assert.equal(old.find((r) => r.key === 'bist100')!.variant, 'price');
+  // Seri ilk alışı kapsamıyor → fiyat endeksi
+  const late = series({ '2026-02-02': 21000, '2026-11-26': 25000 });
+  const notCovered = computeBenchmarks(txs, 1500, raw, fxHistory, { ...bench, XU100TR: late }, '2026-11-27');
+  const p = notCovered.find((r) => r.key === 'bist100')!;
+  assert.equal(p.variant, 'price');
+  close(p.value, (1000 / 10000) * 12000);
+});
+
+const BIST_HISTORY = {
+  status: 'success',
+  data: [
+    { indexName: 'XU100_CFNNTLTL', clval: 21469.27, hisTs: '2026-11-26' },
+    { indexName: 'XU100_CFNNTLTL', clval: 21283.83, hisTs: '2026-11-25' },
+    { indexName: 'XU100_CFNNTLTL', clval: 0, hisTs: '2026-11-24' },
+    { indexName: 'XU100_CFNNTLTL', clval: 9.9487, hisTs: '1997-01-02' },
+  ],
+};
+const BIST_CURRENT = (current: string, before: string) => ({
+  status: 'success',
+  data: {
+    code: 'XU100_CFNNTLTL',
+    before: { value: '21283.83', lastCalculatedDate: before },
+    current: { value: '21500.5', lastCalculatedDate: current },
+  },
+});
+
+test('Borsa İstanbul endeks verisi: geçmiş süzülür ve sıralanır, anlık değer okunur', () => {
+  const h = parseBistIndexHistory(BIST_HISTORY, '2026-01-01', 3)!;
+  assert.deepEqual(h.dates, ['2026-11-25', '2026-11-26']);
+  assert.deepEqual(h.rates, [21283.83, 21469.27]);
+  assert.equal(parseBistIndexHistory({ data: 'x' }, '2026-01-01'), null);
+  const cur = parseBistIndexCurrent(BIST_CURRENT('2026-11-26', '2026-11-25'))!;
+  assert.deepEqual(cur.current, { date: '2026-11-26', value: 21500.5 });
+  assert.deepEqual(cur.before, { date: '2026-11-25', value: 21283.83 });
+  assert.equal(parseBistIndexCurrent({}), null);
+});
+
+test('fetchBistIndex: büyük geçmiş yalnız yeni kapanış çıkınca iner, son nokta anlık değer', async () => {
+  const calls: string[] = [];
+  let live = BIST_CURRENT('2026-11-26', '2026-11-25');
+  const fn = async (url: string) => {
+    calls.push(url.match(/veriTuru=([^&]+)/)![1]);
+    const body = url.includes('endeks-graphic') ? BIST_HISTORY : live;
+    return { ok: true, status: 200, json: async () => body };
+  };
+  const first = await fetchBistIndex('XU100_CFNNTLTL', '2026-11-25', undefined, fn);
+  assert.deepEqual(calls, ['current-before', 'endeks-graphic']);
+  assert.match(calls.join(), /current-before/);
+  assert.deepEqual(first.dates, ['2026-11-25', '2026-11-26']);
+  assert.equal(first.rates.at(-1), 21500.5, 'bugünün kapanışı yerine anlık değer');
+
+  calls.length = 0;
+  await fetchBistIndex('XU100_CFNNTLTL', '2026-11-25', first, fn);
+  assert.deepEqual(calls, ['current-before'], 'yeni kapanış yok: geçmiş inmez');
+
+  calls.length = 0;
+  live = BIST_CURRENT('2026-11-27', '2026-11-26');
+  const old = { ...first, dates: ['2026-11-25'], rates: [21283.83] };
+  const next = await fetchBistIndex('XU100_CFNNTLTL', '2026-11-25', old, fn);
+  assert.deepEqual(calls, ['current-before', 'endeks-graphic'], 'yeni kapanış var: geçmiş yenilenir');
+  assert.deepEqual(next.dates, ['2026-11-25', '2026-11-26', '2026-11-27']);
+
+  // Hiçbir şey gelmezse hata
+  const fail = async () => ({ ok: false, status: 503, json: async () => ({}) });
+  await assert.rejects(fetchBistIndex('XU100_CFNNTLTL', '2026-11-25', undefined, fail));
 });

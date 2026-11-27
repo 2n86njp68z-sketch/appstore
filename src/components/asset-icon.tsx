@@ -167,10 +167,6 @@ export function CommodityArt({ look }: { look: CommodityLook }) {
   return look === 'oil' ? <OilDrop /> : <Bullion metal={look} />;
 }
 
-function TextBadge({ bg, text }: { bg: string; text: string }) {
-  return <Glyph bg={bg} text={text} fontSize={30} />;
-}
-
 function Bullion({ metal }: { metal: keyof typeof METAL_STYLES }) {
   const st = METAL_STYLES[metal];
   const id = 'g' + useId().replace(/[^a-zA-Z0-9]/g, '');
@@ -313,24 +309,12 @@ export function CategoryIcon({ kind, size }: { kind: AssetKind; size: number }) 
       );
     case 'fx':
       return <PairIcon main="USD" second="EUR" size={size} />;
+    // ABD ETF'leri ABD bayrağıyla, TEFAS ve BES fonları Türk bayrağıyla gösterilir.
     case 'etf':
-      return (
-        <Round size={size}>
-          <TextBadge bg="#15AABF" text="ETF" />
-        </Round>
-      );
+      return <FlagIcon code="USD" size={size} />;
     case 'fund':
-      return (
-        <Round size={size}>
-          <FundMark bg="#E64980" />
-        </Round>
-      );
     case 'bes':
-      return (
-        <Round size={size}>
-          <TextBadge bg="#2B8A3E" text="BES" />
-        </Round>
-      );
+      return <FlagIcon code="TR" size={size} />;
     case 'other':
       return (
         <Round size={size}>

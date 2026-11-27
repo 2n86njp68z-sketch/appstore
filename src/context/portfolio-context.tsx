@@ -1,10 +1,17 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { AppState } from 'react-native';
+import { AppState, Platform } from 'react-native';
 
 import { assetKey, isManualPriced } from '@/lib/assets';
 import { BENCH_SYMBOLS, computeBenchmarks, type BenchmarkResult, type BenchSeries } from '@/lib/benchmarks';
 import { computeHoldings, computeSummary, DISPLAY_CURRENCIES, requiredQuoteSymbols } from '@/lib/portfolio';
-import { fetchAnyQuotes, fetchHistory, fetchTurkeyCpi, historyRange } from '@/lib/prices';
+import {
+  BIST100_TR_CODE,
+  fetchAnyQuotes,
+  fetchBistIndex,
+  fetchHistory,
+  fetchTurkeyCpi,
+  historyRange,
+} from '@/lib/prices';
 import {
   loadAll,
   saveBenchSeries,
@@ -54,7 +61,10 @@ async function refreshFxHistory(transactions: Transaction[], current: FxHistory)
   return changed ? next : null;
 }
 
-/** Karşılaştırma ölçütlerinin geçmişini gerekirse günceller (BIST 100, S&P 500 TR: 12 saat; TÜFE: 1 gün). */
+/**
+ * Karşılaştırma ölçütlerinin geçmişini gerekirse günceller. BIST 100 getiri endeksi: saatte bir (büyük geçmiş
+ * dosyası yalnız yeni kapanış çıkınca iner); BIST 100 fiyat endeksi ve S&P 500 TR: 12 saat; TÜFE: 1 gün.
+ */
 async function refreshBenchSeries(transactions: Transaction[], current: BenchSeries): Promise<BenchSeries | null> {
   if (transactions.length === 0) return null;
   const earliest = transactions.reduce((m, t) => (t.date < m ? t.date : m), transactions[0].date);
@@ -70,6 +80,10 @@ async function refreshBenchSeries(transactions: Transaction[], current: BenchSer
     if (stale(current[sym], HISTORY_TTL_MS)) {
       jobs.push(fetchHistory(sym, range).then((s) => [sym, { ...s, range }]));
     }
+  }
+  // Borsa İstanbul tarayıcıdan erişime (CORS) izin vermiyor: web sürümünde fiyat endeksi kullanılır.
+  if (Platform.OS !== 'web' && stale(current.XU100TR, 60 * 60 * 1000, earliest)) {
+    jobs.push(fetchBistIndex(BIST100_TR_CODE, earliest, current.XU100TR).then((s) => ['XU100TR', s]));
   }
   const cpiFrom = `${earliest.slice(0, 7)}-01`;
   if (stale(current.CPI, 24 * 60 * 60 * 1000, cpiFrom)) {

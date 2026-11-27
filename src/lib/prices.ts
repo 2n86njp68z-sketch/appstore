@@ -33,9 +33,9 @@ export function parseYahooChart(json: unknown, now: number = Date.now()): RawQuo
   return { price, previousClose: prev, name: name?.trim(), fetchedAt: now };
 }
 
-async function fetchWithTimeout(fetchFn: FetchLike, url: string) {
+async function fetchWithTimeout(fetchFn: FetchLike, url: string, timeoutMs = TIMEOUT_MS) {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     return await fetchFn(url, { signal: controller.signal, headers: { Accept: 'application/json' } });
   } finally {
@@ -336,4 +336,98 @@ export async function fetchTurkeyCpi(
     }
   }
   throw lastError;
+}
+
+// ---------------------------------------------------------------------------
+// Borsa İstanbul endeksleri: sitenin kendi grafik verisi. BIST 100 getiri endeksi (XU100_CFNNTLTL,
+// net temettüler endekse geri yatırılmış sayılır) Yahoo'da yok, buradan alınır.
+//  • current-before: anlık değer ve bir önceki kapanış (küçük)
+//  • endeks-graphic: 1997'den bugüne günlük kapanışlar (~500 KB) → yalnız yeni kapanış çıkınca çekilir
+
+const BIST_GRAPHIC = 'https://borsaistanbul.com/graphic.php';
+export const BIST100_TR_CODE = 'XU100_CFNNTLTL';
+
+const isDay = (v: unknown): v is string => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}/.test(v);
+
+/** Günlük kapanışlar; fromDate'ten (dahil) sonrası, eskiden yeniye. */
+export function parseBistIndexHistory(json: unknown, fromDate: string, now: number = Date.now()): FxSeries | null {
+  const rows = (json as { data?: unknown })?.data;
+  if (!Array.isArray(rows)) return null;
+  const byDate = new Map<string, number>();
+  for (const r of rows as { hisTs?: unknown; clval?: unknown }[]) {
+    const v = Number(r?.clval);
+    if (!isDay(r?.hisTs) || !(v > 0)) continue;
+    const d = r.hisTs.slice(0, 10);
+    if (d >= fromDate) byDate.set(d, v);
+  }
+  if (byDate.size === 0) return null;
+  const dates = [...byDate.keys()].sort();
+  return { dates, rates: dates.map((d) => byDate.get(d)!), fetchedAt: now };
+}
+
+interface BistPoint {
+  date: string;
+  value: number;
+}
+
+/** Anlık değer ve önceki kapanış. */
+export function parseBistIndexCurrent(json: unknown): { current?: BistPoint; before?: BistPoint } | null {
+  const data = (json as { data?: Record<string, { value?: unknown; lastCalculatedDate?: unknown }> })?.data;
+  if (!data || typeof data !== 'object') return null;
+  const point = (p?: { value?: unknown; lastCalculatedDate?: unknown }): BistPoint | undefined => {
+    const v = Number(p?.value);
+    return isDay(p?.lastCalculatedDate) && v > 0 ? { date: p.lastCalculatedDate.slice(0, 10), value: v } : undefined;
+  };
+  const out = { current: point(data.current), before: point(data.before) };
+  return out.current || out.before ? out : null;
+}
+
+function withPoint(series: FxSeries, p: BistPoint): FxSeries {
+  const dates = [...series.dates];
+  const rates = [...series.rates];
+  const i = dates.indexOf(p.date);
+  if (i >= 0) rates[i] = p.value;
+  else if (dates.length === 0 || p.date > dates[dates.length - 1]) {
+    dates.push(p.date);
+    rates.push(p.value);
+  }
+  return { ...series, dates, rates };
+}
+
+/**
+ * Borsa İstanbul endeksinin fromDate'i kapsayan (10 gün öncesinden başlayan) serisi; son nokta anlık değerdir.
+ * Elde yeterli seri varsa büyük geçmiş dosyası yalnız yeni bir kapanış açıklandığında yeniden indirilir.
+ */
+export async function fetchBistIndex(
+  code: string,
+  fromDate: string,
+  cached?: FxSeries,
+  fetchFn: FetchLike = fetch as unknown as FetchLike,
+): Promise<FxSeries> {
+  const url = (tur: string) => `${BIST_GRAPHIC}?veriTuru=${tur}&indexCode=${encodeURIComponent(code)}`;
+  let live: ReturnType<typeof parseBistIndexCurrent> = null;
+  try {
+    const res = await fetchWithTimeout(fetchFn, url('current-before'));
+    if (res.ok) live = parseBistIndexCurrent(await res.json());
+  } catch {
+    // Anlık değer gelmese de geçmişle devam edilir.
+  }
+
+  // fromDate tatile denk gelse de önceki kapanış bilinsin diye 10 gün öncesinden alınır.
+  const start = new Date(Date.parse(fromDate) - 10 * 86_400_000).toISOString().slice(0, 10);
+  const usable = cached && cached.dates.length > 0 && cached.dates[0] <= fromDate ? cached : undefined;
+  const lastCached = usable?.dates[usable.dates.length - 1];
+  let series: FxSeries | undefined = usable;
+  if (!usable || (live?.before && lastCached! < live.before.date)) {
+    try {
+      const res = await fetchWithTimeout(fetchFn, url('endeks-graphic'), 30_000);
+      if (res.ok) series = parseBistIndexHistory(await res.json(), start) ?? series;
+    } catch {
+      // Geçmiş inmezse eldeki seriyle devam edilir.
+    }
+  }
+  if (!series) throw new Error(`${code} endeks verisi alınamadı`);
+  if (live?.before) series = withPoint(series, live.before);
+  if (live?.current) series = withPoint(series, live.current);
+  return { ...series, fetchedAt: Date.now() };
 }

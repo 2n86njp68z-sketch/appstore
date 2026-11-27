@@ -30,6 +30,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle, Line, Path } from 'react-native-svg';
 
 import { AssetIcon, CategoryIcon } from '@/components/asset-icon';
+import { TrendIcon } from '@/components/trend-icon';
 import { pnlColor, pnlSoft, Radius, Type, useColors } from '@/constants/theme';
 import { usePortfolio } from '@/context/portfolio-context';
 import { paletteFor } from '@/lib/donut';
@@ -155,15 +156,7 @@ interface MarketSection {
   data: StockItem[];
 }
 
-function EtfIcon({ size }: { size: number }) {
-  return (
-    <View style={[styles.etf, { width: size, height: size, borderRadius: size / 2 }]}>
-      <Text style={[Type.caption, { color: '#FFFFFF', fontSize: size * 0.3 }]}>ETF</Text>
-    </View>
-  );
-}
-
-const SECTION_DEFS: { key: string; title: string; kind?: AssetKind; market?: MarketKey }[] = [
+const SECTION_DEFS: { key: string; title: string; kind: AssetKind; market?: MarketKey }[] = [
   { key: 'bist', title: 'Türk Market', kind: 'bist', market: 'bist' },
   { key: 'us', title: 'ABD Market', kind: 'us', market: 'us' },
   { key: 'metal', title: 'Emtia', kind: 'metal', market: 'metal' },
@@ -283,7 +276,7 @@ function MarketDrawer({ open, onClose }: { open: boolean; onClose: () => void })
       title: d.title,
       available: m != null,
       market: m,
-      icon: d.kind ? <CategoryIcon kind={d.kind} size={30} /> : <EtfIcon size={30} />,
+      icon: <CategoryIcon kind={d.kind} size={30} />,
       total: m ? (results ? results[m].length : MARKETS[m].stocks.length) : undefined,
       data,
     };
@@ -525,12 +518,19 @@ const StockRow = memo(function StockRow({
     quote?.previousClose != null && quote.previousClose > 0
       ? ((quote.price - quote.previousClose) / quote.previousClose) * 100
       : undefined;
+  // Kutunun solundaki çubuk ve sağdaki yön çizgisi: yükselişte yeşil, düşüşte kırmızı.
+  const barColor = change == null || change === 0 ? c.border : pnlColor(c, change);
   return (
     <Pressable
       onPress={() => onPress(market, stock.code)}
       accessibilityRole="button"
       accessibilityLabel={`${stock.code} ${stock.name}`}
-      style={({ pressed }) => [styles.stockRow, pressed && { backgroundColor: c.card }]}>
+      style={({ pressed }) => [
+        styles.stockCard,
+        { backgroundColor: c.card, borderColor: c.border },
+        pressed && { opacity: 0.6 },
+      ]}>
+      <View style={[styles.stockBar, { backgroundColor: barColor }]} />
       <AssetIcon
         kind={MARKETS[market].kind}
         symbol={stock.code}
@@ -546,20 +546,27 @@ const StockRow = memo(function StockRow({
           {subtitle}
         </Text>
       </View>
-      {/* Fonların fiyatı otomatik gelmiyor: fiyat yoksa sütunlar gizlenir, ad tam görünür. */}
+      {/* Fonların fiyatı otomatik gelmiyor: fiyat yoksa sütun gizlenir, ad tam görünür. */}
       {(!manual || quote) && (
-        <Text style={[Type.number, styles.price, { color: quote ? c.text : c.textTertiary }]} numberOfLines={1}>
-          {quote ? formatPrice(quote.price, MARKETS[market].currencyOf(stock.code)) : '—'}
-        </Text>
-      )}
-      {!manual && (
-        <View style={[styles.change, { backgroundColor: change != null ? pnlSoft(c, change) : c.chip }]}>
-          <Text
-            style={[Type.caption, styles.changeText, { color: change != null ? pnlColor(c, change) : c.textTertiary }]}>
-            {change != null ? formatPct(change) : '—'}
+        <View style={styles.priceCol}>
+          <Text style={[Type.number, styles.price, { color: quote ? c.text : c.textTertiary }]} numberOfLines={1}>
+            {quote ? formatPrice(quote.price, MARKETS[market].currencyOf(stock.code)) : '—'}
           </Text>
+          {!manual && (
+            <View style={[styles.change, { backgroundColor: change != null ? pnlSoft(c, change) : c.chip }]}>
+              <Text
+                style={[
+                  Type.caption,
+                  styles.changeText,
+                  { color: change != null ? pnlColor(c, change) : c.textTertiary },
+                ]}>
+                {change != null ? formatPct(change) : '—'}
+              </Text>
+            </View>
+          )}
         </View>
       )}
+      {!manual && <TrendIcon change={change} up={c.positive} down={c.negative} flat={c.textTertiary} size={22} />}
     </Pressable>
   );
 });
@@ -630,17 +637,29 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 3,
   },
-  etf: {
-    backgroundColor: '#7C5CFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  stockRow: {
+  stockCard: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    paddingHorizontal: 16,
-    paddingVertical: 9,
+    marginHorizontal: 12,
+    marginVertical: 4,
+    paddingLeft: 14,
+    paddingRight: 10,
+    paddingVertical: 10,
+    borderRadius: Radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    overflow: 'hidden',
+  },
+  stockBar: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: 4,
+  },
+  priceCol: {
+    alignItems: 'flex-end',
+    gap: 4,
   },
   stockMain: {
     flex: 1,
@@ -648,14 +667,13 @@ const styles = StyleSheet.create({
   },
   price: {
     fontSize: 14,
-    minWidth: 66,
     textAlign: 'right',
   },
   change: {
-    minWidth: 66,
-    borderRadius: 8,
+    minWidth: 60,
+    borderRadius: 7,
     paddingHorizontal: 6,
-    paddingVertical: 5,
+    paddingVertical: 3,
     alignItems: 'flex-end',
   },
   changeText: {

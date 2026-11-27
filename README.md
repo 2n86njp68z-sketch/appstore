@@ -20,7 +20,9 @@ Expo (React Native) ile yazıldı. Geliştirmek ve App Store'a göndermek için 
 - **Piyasalar menüsü (sol üstteki ☰):**
   - En üstte arama çubuğu var. Kod ya da şirket adı yazdıkça sonuçlar anında süzülür, Türkçe harf farkı önemli değildir.
   - Bölümler: Türk Market, ABD Market, Emtia, TEFAS, BES, Kripto, ABD ETF.
-  - Bölüme dokununca kalemler alt alta açılır. Aynı anda tek bölüm açık kalır.
+  - Bölüme dokununca kalemler alt alta kutucuklar halinde açılır. Aynı anda tek bölüm açık kalır.
+  - Kutunun solundaki çubuk ve sağdaki yön çizgisi yükselende yeşil, düşende kırmızı.
+  - Türk Market, TEFAS ve BES'te Türk bayrağı; ABD Market ve ABD ETF'te ABD bayrağı.
     - Türk Market: BIST'teki 629 hisse
     - ABD Market: NASDAQ, NYSE ve NYSE American'daki 5.866 hisse (ADR'ler dahil; ETF, varant ve imtiyazlı paylar hariç)
     - Emtia: altın, gümüş, platin, paladyum ve Brent petrol; her biri dolar bazında ($/ons, Brent $/varil) ve TL bazında (₺/gram, Brent ₺/varil)
@@ -35,7 +37,7 @@ Expo (React Native) ile yazıldı. Geliştirmek ve App Store'a göndermek için 
 - **Kâr/zarar:** Halkanın altındaki ince kartta yan yana "Bugün" (günlük) ve "Toplam" kâr/zarar, tutar ve yüzde olarak.
 - **Karşılaştırma:** Portföy üç ölçütle karşılaştırılır. Her alış, aynı gün aynı TL tutarıyla ölçüte yatırılmış gibi hesaplanır, satışlar da aynı şekilde düşülür (yalnız bir günü değil, tüm geçmişi karşılaştırır).
   - Sonuç yüzde olarak yazar: "+%12" portföyün ölçütten %12 önde olduğunu, "−%5" geride olduğunu gösterir. Altında "ölçütü alsaydın bugün ne olurdu" tutarı yazar.
-  - BIST 100: XU100 fiyat endeksi. Temettüler dahil getiri endeksi ücretsiz bir kaynakta bulunmadığı için temettüler hariçtir (kartta yazar).
+  - BIST 100: temettüler dahil getiri endeksi (XU100_CFNNTLTL), Borsa İstanbul'un kendi sitesinden. Alınamazsa ya da güncel değilse XU100 fiyat endeksine (temettüler hariç) düşülür; kartta hangisinin kullanıldığı yazar.
   - S&P 500: temettüler dahil getiri endeksi (^SP500TR), her günün dolar kuruyla TL'ye çevrilir.
   - Enflasyon: TÜİK TÜFE (aylık endeks), OECD istatistik servisinden. Son açıklanan aydan sonraki alışlar için enflasyon henüz bilinmediğinden tutar olduğu gibi alınır; kartta verinin hangi aya kadar olduğu yazar.
 - **Varlık türleri:**
@@ -91,6 +93,7 @@ tests/                  Birim testleri
   - `src/data/crypto.ts`: **CoinGecko**'dan ilk 500 coin (logolarıyla)
 - Fiyatlar:
   - Hisse, ETF, döviz, emtia ve endeksler (XU100, ^SP500TR): Yahoo Finance
+  - BIST 100 getiri endeksi: Borsa İstanbul (`borsaistanbul.com`). Uzun geçmiş dosyası (~500 KB) yalnız yeni kapanış açıklanınca iner, anlık değer saatte bir yenilenir. Site tarayıcıdan erişime izin vermediği için web sürümünde fiyat endeksi kullanılır.
   - Enflasyon (TÜİK TÜFE): OECD istatistik servisi (`sdmx.oecd.org`). TÜİK'in kendi veri servisi giriş istiyor.
   - Kripto: CoinGecko, coin kimliğiyle; aynı kısaltmalı coinler karışmaz
   - Fonlar (TEFAS/BES): **elle girilir.** Günlük fon fiyatları yalnız TEFAS'ta var ve TEFAS sitesi otomatik erişime karşı korunuyor. Lisanslı bir veri kaynağı bağlanınca otomatik olabilir.
@@ -152,6 +155,5 @@ Göndermeden önce `app.json` içindeki `ios.bundleIdentifier` değerini (şu an
   - Sağlayıcı değişirse yalnızca `src/lib/prices.ts` değişir.
 - Geçmiş kurlar da Yahoo Finance'ten günlük kapanış olarak alınıyor. Gün içi kur farkı dikkate alınmıyor.
 - TEFAS/BES fon fiyatları elle giriliyor (yukarıda nedeni yazıyor).
-- Karşılaştırmada BIST 100 temettüler hariç. Temettüler dahil BIST 100 getiri endeksi için lisanslı veri gerekir.
 - OECD'deki Türkiye TÜFE serisi şu an Aralık 2025'te bitiyor. Güncel TÜFE için TCMB EVDS (ücretsiz, kayıt ve API anahtarı ister) bağlanabilir.
 - Veriler yalnızca telefonda duruyor. Uygulama silinirse veriler de silinir. Yedekleme ileride eklenebilir.

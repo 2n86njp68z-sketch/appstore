@@ -27,7 +27,11 @@ function monthLabel(ym?: string): string {
 }
 
 const INFO: Record<BenchKey, { title: string; sub: (r: BenchmarkResult) => string; worth: string }> = {
-  bist100: { title: 'BIST 100', sub: () => 'Fiyat endeksi · temettüler hariç', worth: 'BIST 100 alsaydın' },
+  bist100: {
+    title: 'BIST 100',
+    sub: (r) => (r.variant === 'total' ? 'Getiri endeksi · temettüler dahil' : 'Fiyat endeksi · temettüler hariç'),
+    worth: 'BIST 100 alsaydın',
+  },
   sp500tr: { title: 'S&P 500', sub: () => 'Temettüler dahil · TL bazında', worth: 'S&P 500 alsaydın' },
   cpi: {
     title: 'Enflasyon',

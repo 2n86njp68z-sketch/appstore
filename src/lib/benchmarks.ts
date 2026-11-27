@@ -4,7 +4,8 @@ import type { FxHistory, FxSeries, RawQuote, Transaction } from './types';
 
 /**
  * Karşılaştırma ölçütleri:
- * - BIST 100 (XU100, fiyat endeksi; temettü dahil getiri endeksi ücretsiz kaynaklarda yok)
+ * - BIST 100 getiri endeksi (XU100_CFNNTLTL, temettüler dahil; Borsa İstanbul'dan). Alınamazsa
+ *   Yahoo'daki fiyat endeksine (XU100.IS, temettüler hariç) düşülür.
  * - S&P 500 Total Return (^SP500TR, temettüler dahil; TL'ye günlük kurla çevrilir)
  * - TÜİK TÜFE (aylık endeks; paranın satın alma gücü)
  */
@@ -13,8 +14,14 @@ export type BenchKey = 'bist100' | 'sp500tr' | 'cpi';
 export const BENCH_SYMBOLS = { bist100: 'XU100.IS', sp500tr: '^SP500TR' } as const;
 export const BENCH_KEYS: BenchKey[] = ['bist100', 'sp500tr', 'cpi'];
 
-/** Endeks geçmişleri: "XU100.IS", "^SP500TR" (günlük) ve "CPI" (aylık, tarih = ayın 1'i). */
-export type BenchSeries = Partial<Record<'XU100.IS' | '^SP500TR' | 'CPI', FxSeries>>;
+/**
+ * Endeks geçmişleri: "XU100TR" (BIST 100 getiri endeksi, son nokta anlık değer), "XU100.IS", "^SP500TR"
+ * (günlük) ve "CPI" (aylık, tarih = ayın 1'i).
+ */
+export type BenchSeries = Partial<Record<'XU100TR' | 'XU100.IS' | '^SP500TR' | 'CPI', FxSeries>>;
+
+/** Getiri endeksi serisi bu kadar gündür güncellenmediyse fiyat endeksine düşülür (uzun bayram tatili payı). */
+const STALE_DAYS = 10;
 
 export interface BenchmarkResult {
   key: BenchKey;
@@ -30,6 +37,8 @@ export interface BenchmarkResult {
   partial?: boolean;
   /** Hiçbir işlem için veri yok (tüm alışlar son açıklanan aydan sonra); value ve diffPct anlamsız. */
   missing?: boolean;
+  /** BIST 100'de kullanılan endeks: getiri (temettüler dahil) ya da fiyat (temettüler hariç). */
+  variant?: 'total' | 'price';
 }
 
 /** İşlemin o günkü TL tutarı (dolarlı varlıklar işlem günündeki kurla). */
@@ -72,6 +81,7 @@ export function computeBenchmarks(
   raw: Record<string, RawQuote>,
   fxHistory: FxHistory,
   bench: BenchSeries,
+  today: string = new Date().toISOString().slice(0, 10),
 ): BenchmarkResult[] {
   if (transactions.length === 0 || !(portfolioValueTry > 0)) return [];
   const fx = new FxRates(raw, fxHistory);
@@ -87,14 +97,28 @@ export function computeBenchmarks(
     });
   };
 
-  // BIST 100 (TL)
-  const xu = bench['XU100.IS'];
-  const xuNow = raw[BENCH_SYMBOLS.bist100]?.price ?? last(xu)?.value;
-  if (xu && xuNow)
+  // BIST 100 (TL): getiri endeksi işlemlerin ilk gününü kapsıyor ve güncelse o, yoksa fiyat endeksi
+  const earliest = transactions.reduce((m, t) => (t.date < m ? t.date : m), transactions[0].date);
+  const tr = bench.XU100TR;
+  const trLast = last(tr);
+  const staleBefore = new Date(Date.parse(today) - STALE_DAYS * 86_400_000).toISOString().slice(0, 10);
+  if (tr && trLast && tr.dates[0] <= earliest && trLast.date >= staleBefore) {
     push(
       'bist100',
-      simulate(transactions, fx, (d) => rateOn(xu, d), xuNow),
+      simulate(transactions, fx, (d) => rateOn(tr, d), trLast.value),
+      { variant: 'total' },
     );
+  } else {
+    const xu = bench['XU100.IS'];
+    const xuNow = raw[BENCH_SYMBOLS.bist100]?.price ?? last(xu)?.value;
+    if (xu && xuNow) {
+      push(
+        'bist100',
+        simulate(transactions, fx, (d) => rateOn(xu, d), xuNow),
+        { variant: 'price' },
+      );
+    }
+  }
 
   // S&P 500 Total Return (USD → TL, günlük kurla)
   const sp = bench['^SP500TR'];
