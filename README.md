@@ -1,4 +1,6 @@
-# Portföy Takip
+# GENIUS
+
+Portföy takip uygulaması.
 
 Hisse (BIST ve ABD), kripto, döviz, gram altın/gümüş ve fon gibi varlıkları tek yerde takip eden iPhone/Android uygulaması.
 Expo (React Native) ile yazıldı. Geliştirmek ve App Store'a göndermek için Mac gerekmez.

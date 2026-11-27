@@ -4,6 +4,7 @@ import { Manrope_500Medium } from '@expo-google-fonts/manrope/500Medium';
 import { Manrope_600SemiBold } from '@expo-google-fonts/manrope/600SemiBold';
 import { Manrope_700Bold } from '@expo-google-fonts/manrope/700Bold';
 import { Manrope_800ExtraBold } from '@expo-google-fonts/manrope/800ExtraBold';
+import { Unbounded_900Black } from '@expo-google-fonts/unbounded/900Black';
 import { useFonts } from 'expo-font';
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
@@ -11,6 +12,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import { useColorScheme } from 'react-native';
 
+import { GeniusLogo } from '@/components/genius-logo';
 import { MarketDrawerProvider } from '@/components/market-drawer';
 import { Colors, Font } from '@/constants/theme';
 import { PortfolioProvider } from '@/context/portfolio-context';
@@ -26,6 +28,7 @@ export default function RootLayout() {
     Manrope_600SemiBold,
     Manrope_700Bold,
     Manrope_800ExtraBold,
+    Unbounded_900Black,
   });
   const ready = fontsLoaded || fontError != null;
 
@@ -69,7 +72,7 @@ export default function RootLayout() {
               headerBackTitleStyle: { fontFamily: Font.medium },
               contentStyle: { backgroundColor: c.background },
             }}>
-            <Stack.Screen name="index" options={{ title: 'Portföyüm', headerLargeTitle: true }} />
+            <Stack.Screen name="index" options={{ title: 'GENIUS', headerTitle: () => <GeniusLogo /> }} />
             <Stack.Screen name="add" options={{ title: 'İşlem Ekle', presentation: 'modal' }} />
             <Stack.Screen name="asset/[key]" options={{ title: '' }} />
           </Stack>

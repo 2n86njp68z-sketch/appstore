@@ -76,6 +76,8 @@ export const Font = {
   semibold: 'Manrope_600SemiBold',
   bold: 'Manrope_700Bold',
   extrabold: 'Manrope_800ExtraBold',
+  /** Logo (GENIUS) yazı tipi. */
+  logo: 'Unbounded_900Black',
 } as const;
 
 const tabular: TextStyle['fontVariant'] = ['tabular-nums'];
