@@ -38,11 +38,16 @@ export interface MarketDef {
 
 const COMMODITY_STOCKS: readonly MarketStock[] = COMMODITIES.map((c) => ({ code: c.symbol, name: c.name }));
 
-/** Hazine eurobondları: ad vade ve döviz cinsinden ("Vade 15.01.2028 · USD"); aramada yıl da bulunur. */
+/**
+ * Hazine eurobondları: ad vade ve kupondan ("Vade 15.01.2028 · kupon %9,875"); aramada yıl, döviz
+ * cinsi ve "hazine" de bulunur.
+ */
 const EUROBOND_STOCKS: readonly MarketStock[] = EUROBONDS.map((e) => ({
   code: e.code,
-  name: `Vade ${e.maturity.split('-').reverse().join('.')} · ${e.currency}`,
-  company: 'Hazine eurobond',
+  name:
+    `Vade ${e.maturity.split('-').reverse().join('.')}` +
+    (e.coupon != null ? ` · kupon %${String(e.coupon).replace('.', ',')}` : ` · ${e.currency}`),
+  company: `Hazine eurobond ${e.currency}`,
 }));
 
 function quoteKeysFor(kind: AssetKind) {

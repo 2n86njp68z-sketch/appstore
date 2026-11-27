@@ -29,7 +29,16 @@ test('Hazine eurobond listesi: ISIN, vade, dolar ve euro cinsi', () => {
     list.some((s) => eurobondInfo(s.code)?.currency === 'EUR'),
     'euro cinsi de var',
   );
-  assert.equal(stockInfo('eurobond', 'US900123DF45')?.name, 'Vade 15.01.2028 · USD');
+  assert.equal(stockInfo('eurobond', 'US900123DF45')?.name, 'Vade 15.01.2028 · kupon %9,875');
+  assert.equal(usd.coupon, 9.875);
+  assert.ok(
+    list.every((s) => eurobondInfo(s.code)?.coupon != null),
+    'hepsinin kuponu var',
+  );
+  assert.equal(eurobondInfo('XS3578925037')?.coupon, 5.85);
+  // "eur" aynı zamanda "eurobond"un başı olduğundan döviz araması "usd" ile denenir
+  const usdOnly = searchStocks('usd', list);
+  assert.ok(usdOnly.length > 0 && usdOnly.every((s) => eurobondInfo(s.code)?.currency === 'USD'));
   assert.equal(displaySymbol('eurobond', 'US900123DF45'), 'Oca 2028 USD');
   assert.ok(searchStocks('2028', list).some((s) => s.code === 'US900123DF45'));
   assert.ok(searchStocks('hazine', list).length === list.length);

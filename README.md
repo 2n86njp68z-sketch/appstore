@@ -32,7 +32,7 @@ Expo (React Native) ile yazıldı. Geliştirmek ve App Store'a göndermek için 
     - Emtia: altın, gümüş, platin, paladyum ve Brent petrol; her biri dolar bazında ($/ons, Brent $/varil) ve TL bazında (₺/gram, Brent ₺/varil)
     - TEFAS: 2.106 yatırım fonu
     - BES: 288 emeklilik yatırım fonu
-    - Eurobond (Avrupa Birliği bayrağı): T.C. Hazine ve Maliye Bakanlığı'nın dolar ve euro cinsi 38 eurobondu; vade, döviz cinsi, fiyat (100 nominal başına) ve yıllık getiri
+    - Eurobond (Avrupa Birliği bayrağı): T.C. Hazine ve Maliye Bakanlığı'nın tedavüldeki dolar ve euro cinsi 38 eurobondu (33 USD, 5 EUR; Kasım 2026); vade, kupon, fiyat (100 nominal başına) ve yıllık getiri. Liste Ziraat Bankası ve eurobondpro.com ile karşılaştırılarak doğrulandı.
     - Kripto: piyasa değerine göre ilk 491 coin
     - Endeks: S&P 500, Nasdaq 100, BIST 100 (yalnız izlenir, portföye eklenmez)
     - Kurlar: Dolar (USD/TRY) ve Euro (EUR/TRY); dokununca portföye döviz olarak eklenir
@@ -141,7 +141,8 @@ python3 -I scripts/build-fund-data.py /tmp/fon/funds.json > src/data/funds.ts
 python3 -I scripts/fetch-crypto-sources.py /tmp/kripto
 python3 -I scripts/build-crypto-data.py /tmp/kripto/crypto.json > src/data/crypto.ts
 curl -sL -o /tmp/ziraat-eurobond.html https://www.ziraatbank.com.tr/tr/bireysel/yatirim/eurobond
-python3 -I scripts/build-eurobond-data.py /tmp/ziraat-eurobond.html > src/data/eurobonds.ts
+curl -sL -o /tmp/eurobondpro.html https://eurobondpro.com/hazine-eurobond-listesi
+python3 -I scripts/build-eurobond-data.py /tmp/ziraat-eurobond.html /tmp/eurobondpro.html > src/data/eurobonds.ts
 ```
 
 Logo (GENIUS) çizgileri Unbounded Black yazı tipinden üretilir (fontTools gerekir):
