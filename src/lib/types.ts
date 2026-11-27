@@ -1,3 +1,5 @@
+import type { CashFlow, XirrResult } from './xirr';
+
 /** Varlık türleri. */
 export type AssetKind = 'bist' | 'us' | 'etf' | 'crypto' | 'fx' | 'metal' | 'fund' | 'bes' | 'eurobond' | 'other';
 
@@ -111,6 +113,10 @@ export interface MoneyView {
   /** Alınan net temettüler (her biri kendi günündeki kurla). */
   dividends: number;
   dayChange?: number;
+  /** Para akışları (alış −, satış/temettü/bugünkü değer +), bu para biriminde. */
+  flows: CashFlow[];
+  /** Yıllık getiri (XIRR); dönem kısaysa yok. */
+  xirr?: XirrResult;
 }
 
 /** Bedelsiz/bölünme ve nakit temettü; tarih hak kullanım (ex) günü "YYYY-AA-GG". */
@@ -133,6 +139,8 @@ export interface MoneyTotals {
   dayChangePct: number;
   /** Kur eksik olduğu için toplama katılamayan varlık var mı? */
   incomplete: boolean;
+  /** Portföyün yıllık getirisi (XIRR); satılıp kapanan varlıklar dahil. */
+  xirr?: XirrResult;
 }
 
 export interface AllocationSlice {

@@ -33,8 +33,10 @@ import {
   formatTime,
   trUpper,
 } from '@/lib/format';
+import { notify } from '@/lib/dialog';
 import { DISPLAY_CURRENCIES } from '@/lib/portfolio';
 import type { AssetKind, DisplayCurrency, Holding } from '@/lib/types';
+import { formatPeriod, XIRR_MIN_DAYS, type XirrResult } from '@/lib/xirr';
 
 function tick() {
   if (Platform.OS !== 'web') Haptics.selectionAsync().catch(() => {});
@@ -247,6 +249,8 @@ export default function PortfolioScreen() {
                 pct={formatPct(totals.pnlPct)}
                 tone={totals.pnl}
               />
+              <View style={[styles.pnlDivider, { backgroundColor: c.border }]} />
+              <YearlyCell result={totals.xirr} cur={cur} />
             </View>
 
             {!openCat && (
@@ -364,6 +368,50 @@ function PnlCell({ label, value, pct, tone }: { label: string; value: string; pc
         {value}
       </Text>
     </View>
+  );
+}
+
+const CURRENCY_WORD: Record<DisplayCurrency, string> = { TRY: 'TL', USD: 'dolar', EUR: 'euro' };
+
+/** Yıllık getiri (XIRR) hücresi; dokununca ne olduğu anlatılır. */
+function YearlyCell({ result, cur }: { result?: XirrResult; cur: DisplayCurrency }) {
+  const c = useColors();
+  const pct = result ? result.rate * 100 : undefined;
+  const color = pct == null ? c.textSecondary : pnlColor(c, pct);
+  const explain = () =>
+    notify(
+      'Yıllık getiri (XIRR)',
+      (result
+        ? `Portföyün ${CURRENCY_WORD[cur]} bazında yıllık bileşik getirisi: ${formatPct(result.rate * 100, { signed: true, decimals: 1 })} (${formatPeriod(result.days)}).\n\n`
+        : `Hesap için en az ${XIRR_MIN_DAYS} günlük geçmiş gerekir.\n\n`) +
+        'Her alış, satış ve temettü kendi tarihiyle hesaba girer; yani "paramı ne zaman koydum, ne kadar kaldı" sorusunu yanıtlar ve mevduat faizi gibi yıllık oranlarla kıyaslanabilir. Satılıp kapanan varlıklar dahildir.' +
+        (result && result.days < 365
+          ? '\n\nDönem 1 yıldan kısa olduğu için oran yıllığa çevrildi; kısa sürede çok dalgalanabilir.'
+          : '') +
+        '\n\nDolar veya euro bazında görmek için halkanın ortasına dokun.',
+    );
+  return (
+    <Pressable
+      onPress={explain}
+      accessibilityRole="button"
+      accessibilityLabel="Yıllık getiri, açıklama"
+      style={({ pressed }) => [styles.pnlCell, styles.yearCell, { opacity: pressed ? 0.6 : 1 }]}>
+      <View style={styles.pnlLine}>
+        <Text style={[Type.overline, { color: c.textSecondary, fontSize: 10 }]}>YILLIK</Text>
+        <Svg width={11} height={11} viewBox="0 0 24 24">
+          <Path
+            d="M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM12 16v-5M12 8h.01"
+            stroke={c.textTertiary}
+            strokeWidth={2.4}
+            fill="none"
+            strokeLinecap="round"
+          />
+        </Svg>
+      </View>
+      <Text style={[Type.headline, styles.tabular, styles.pnlValue, { color }]} numberOfLines={1} adjustsFontSizeToFit>
+        {pct == null ? '—' : formatPct(pct, { signed: true, decimals: 1 })}
+      </Text>
+    </Pressable>
   );
 }
 
@@ -616,6 +664,9 @@ const styles = StyleSheet.create({
   pnlCell: {
     flex: 1,
     gap: 3,
+  },
+  yearCell: {
+    flex: 0.62,
   },
   pnlDivider: {
     width: StyleSheet.hairlineWidth,

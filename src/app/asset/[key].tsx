@@ -22,6 +22,7 @@ import {
 } from '@/lib/format';
 import { DISPLAY_CURRENCIES } from '@/lib/portfolio';
 import type { AssetKind, Currency, DisplayCurrency, Holding, Transaction } from '@/lib/types';
+import { formatPeriod } from '@/lib/xirr';
 
 function confirm(title: string, message: string, onConfirm: () => void) {
   if (Platform.OS === 'web') {
@@ -276,6 +277,14 @@ function CurrencyBreakdown({ holding: h }: { holding: Holding }) {
               <View style={{ flex: 1 }}>
                 <Text style={[styles.fxLabel, { color: c.text }]}>{CURRENCY_NAMES[cur]}</Text>
                 <Text style={[styles.fxSub, { color: c.textSecondary }]}>Değer {formatMoney(v.value, cur)}</Text>
+                {v.xirr && (
+                  <Text style={[styles.fxSub, { color: c.textSecondary }]}>
+                    Yıllık{' '}
+                    <Text style={{ color: pnlColor(c, v.xirr.rate) }}>
+                      {formatPct(v.xirr.rate * 100, { signed: true, decimals: 1 })}
+                    </Text>
+                  </Text>
+                )}
               </View>
               <View style={{ alignItems: 'flex-end' }}>
                 <Text style={[styles.fxPnl, { color: pnlColor(c, v.pnl) }]}>
@@ -289,6 +298,9 @@ function CurrencyBreakdown({ holding: h }: { holding: Holding }) {
       </Card>
       <Text style={[styles.note, { color: c.textSecondary }]}>
         Dolar ve euro bazında kâr/zarar, her alışın kendi tarihindeki kurla hesaplanır.
+        {h.views.TRY?.xirr
+          ? ` Yıllık getiri (XIRR) alış, satış ve temettülerin tarihlerine göre yıllık bileşik orandır (${formatPeriod(h.views.TRY.xirr.days)}).`
+          : ''}
       </Text>
     </>
   );

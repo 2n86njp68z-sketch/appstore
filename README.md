@@ -43,7 +43,11 @@ Expo (React Native) ile yazıldı. Geliştirmek ve App Store'a göndermek için 
   - Arama tüm bölümlerde birden yapılır.
   - Fiyatlar yalnız ekranda görünen kalemler için 20'li gruplar halinde çekilir.
   - Hisseye dokununca güncel fiyatı dolu işlem ekleme ekranı açılır. Eklenen hisse portföyde de logosuyla görünür.
-- **Kâr/zarar:** Halkanın altındaki ince kartta yan yana "Bugün" (günlük) ve "Toplam" kâr/zarar, tutar ve yüzde olarak.
+- **Kâr/zarar:** Halkanın altındaki ince kartta yan yana "Bugün" (günlük) ve "Toplam" kâr/zarar, tutar ve yüzde olarak; yanında "Yıllık" getiri.
+- **Yıllık getiri (XIRR):** Her alış, satış ve temettü kendi tarihiyle hesaba girer; bugünkü değer bugünkü akış sayılır. Çıkan oran mevduat faizi gibi yıllık oranlarla kıyaslanabilir.
+  - Ana sayfadaki "Yıllık" hücresi portföyün tamamı içindir (satılıp kapanan varlıklar dahil); dokununca açıklaması çıkar. Seçili para biriminde (TL, dolar, euro) hesaplanır.
+  - Varlık detayında "Para birimine göre" kartında her para birimi için ayrı yazar.
+  - En az 30 günlük geçmiş gerekir (daha kısa sürede yıllığa çevirmek yanıltıcıdır); 1 yıldan kısa dönemde oran yıllığa çevrilmiştir.
 - **Karşılaştırma:** Portföy üç ölçütle karşılaştırılır. Her alış, aynı gün aynı TL tutarıyla ölçüte yatırılmış gibi hesaplanır, satışlar da aynı şekilde düşülür (yalnız bir günü değil, tüm geçmişi karşılaştırır).
   - Sonuç yüzde olarak yazar: "+%12" portföyün ölçütten %12 önde olduğunu, "−%5" geride olduğunu gösterir. Altında "ölçütü alsaydın bugün ne olurdu" tutarı yazar.
   - BIST 100: temettüler dahil getiri endeksi (XU100_CFNNTLTL), Borsa İstanbul'un kendi sitesinden. Alınamazsa ya da güncel değilse XU100 fiyat endeksine (temettüler hariç) düşülür; kartta hangisinin kullanıldığı yazar.

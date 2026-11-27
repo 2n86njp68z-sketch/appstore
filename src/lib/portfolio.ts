@@ -13,6 +13,7 @@ import {
   USDTRY_SYMBOL,
 } from './assets';
 import { applySplits, corporateEvents } from './corporate';
+import { todayIso } from './format';
 import { stockInfo } from './markets';
 import type {
   AllocationSlice,
@@ -30,6 +31,7 @@ import type {
   RawQuote,
   Transaction,
 } from './types';
+import { type CashFlow, xirr } from './xirr';
 
 const EPSILON = 1e-9;
 export const DISPLAY_CURRENCIES: DisplayCurrency[] = ['TRY', 'USD', 'EUR'];
@@ -230,6 +232,8 @@ export function computeHoldings(
   history: FxHistory = {},
   /** Varlık anahtarına göre bedelsiz/bölünme ve temettü kayıtları. */
   actionsByKey: Record<string, CorporateAction[]> = {},
+  /** Bugünkü değerin akış tarihi (yıllık getiri için). */
+  today: string = todayIso(),
 ): Holding[] {
   const groups = new Map<string, Transaction[]>();
   for (const t of transactions) {
@@ -282,12 +286,23 @@ export function computeHoldings(
         const prevValue = convert(units * prev, fx.previous(native), fx.previous(cur));
         if (prevValue != null) viewDayChange = value - prevValue;
       }
+      // Para akışları: alış −, satış +, işlem günündeki kurla
+      const flows: CashFlow[] = [];
+      for (const t of sorted) {
+        const amt = t.quantity * priceFactor(kind) * t.price;
+        const conv = native === cur ? amt : convert(amt, fx.on(native, t.date), fx.on(cur, t.date));
+        if (conv != null) flows.push({ date: t.date, amount: t.side === 'buy' ? -conv : conv });
+      }
       // Temettüler alındıkları günün kuruyla
       let dividends = 0;
       for (const d of events.dividends) {
         const conv = native === cur ? d.amount : convert(d.amount, fx.on(native, d.date), fx.on(cur, d.date));
-        if (conv != null) dividends += conv;
+        if (conv != null) {
+          dividends += conv;
+          flows.push({ date: d.date, amount: conv });
+        }
       }
+      if (pos.quantity > 0) flows.push({ date: today, amount: value });
       const pnl = value - ledger.cost + dividends;
       views[cur] = {
         value,
@@ -297,6 +312,8 @@ export function computeHoldings(
         realized: ledger.realized,
         dividends,
         dayChange: viewDayChange,
+        flows,
+        xirr: xirr(flows),
       } satisfies MoneyView;
     }
 
@@ -385,7 +402,11 @@ export function computeSummary(holdings: Holding[]): PortfolioSummary {
     }
   }
 
-  for (const cur of DISPLAY_CURRENCIES) finish(totals[cur]);
+  for (const cur of DISPLAY_CURRENCIES) {
+    finish(totals[cur]);
+    // Yıllık getiri: satılıp kapanan varlıkların akışları da dahil
+    totals[cur].xirr = xirr(holdings.flatMap((h) => h.views[cur]?.flows ?? []));
+  }
   const totalTry = totals.TRY.value;
 
   const allocation: AllocationSlice[] = [...byKind.entries()]
