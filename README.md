@@ -21,7 +21,7 @@ Expo (React Native) ile yazıldı. Geliştirmek ve App Store'a göndermek için 
   - Hisse ve kriptolarda dilim rengiyle harf rozeti.
 - **Piyasalar menüsü (sol üstteki ☰):**
   - En üstte arama çubuğu var. Kod ya da şirket adı yazdıkça sonuçlar anında süzülür, Türkçe harf farkı önemli değildir.
-  - Bölümler: Türk Market, TEFAS, BES (Türk bayraklılar), ABD Market, ABD ETF (ABD bayraklılar), Emtia, Kripto, Endeks, Kurlar, Karşılaştır.
+  - Bölümler: en üstte Karşılaştır (altında Piyasa nabzı); Türk Market, TEFAS, BES, Eurobond; ABD Market, ABD ETF; Emtia, Kripto; Endeks, Kurlar.
   - En üstte "Piyasa nabzı": BIST 100, S&P 500, Nasdaq 100, Dolar, Euro, Gram Altın ve Bitcoin yan yana kayar.
   - Bölümler gruplar halinde (Türkiye, ABD, Emtia ve kripto, Piyasa özeti, Araçlar), her biri kendi renginde kart.
   - Bölüme dokununca kalemler alt alta kutucuklar halinde açılır. Aynı anda tek bölüm açık kalır.
@@ -30,8 +30,8 @@ Expo (React Native) ile yazıldı. Geliştirmek ve App Store'a göndermek için 
     - Türk Market: BIST'teki 629 hisse
     - ABD Market: NASDAQ, NYSE ve NYSE American'daki 5.866 hisse (ADR'ler dahil; ETF, varant ve imtiyazlı paylar hariç)
     - Emtia: altın, gümüş, platin, paladyum ve Brent petrol; her biri dolar bazında ($/ons, Brent $/varil) ve TL bazında (₺/gram, Brent ₺/varil)
-    - TEFAS: 2.106 yatırım fonu
-    - BES: 288 emeklilik yatırım fonu
+    - TEFAS: 2.145 yatırım fonu, günlük fiyat ve değişimiyle
+    - BES: 400 emeklilik yatırım fonu, günlük fiyat ve değişimiyle
     - Eurobond (Avrupa Birliği bayrağı): T.C. Hazine ve Maliye Bakanlığı'nın tedavüldeki dolar ve euro cinsi 38 eurobondu (33 USD, 5 EUR; Kasım 2026); vade, kupon, fiyat (100 nominal başına) ve yıllık getiri. Liste Ziraat Bankası ve eurobondpro.com ile karşılaştırılarak doğrulandı.
     - Kripto: piyasa değerine göre ilk 491 coin
     - Endeks: S&P 500, Nasdaq 100, BIST 100 (yalnız izlenir, portföye eklenmez)
@@ -55,7 +55,7 @@ Expo (React Native) ile yazıldı. Geliştirmek ve App Store'a göndermek için 
   - Kripto (BTC, ETH…)
   - Döviz (USD, EUR, GBP, CHF)
   - Emtia: altın, gümüş, platin, paladyum, Brent petrol (dolar ve TL bazında)
-  - TEFAS ve BES fonları (fiyat elle girilir)
+  - TEFAS ve BES fonları (fiyat TEFAS'tan otomatik; TEFAS'ta işlem görmeyen fonun fiyatı elle girilebilir)
   - Eurobond: miktar nominal olarak girilir, fiyat 100 nominal başınadır; değer = nominal × fiyat / 100
   - "Diğer": fiyatını elle girdiğin mevduat vb.
 - **Alış/satış kaydı:** Ortalama maliyet ve gerçekleşen kâr/zarar hesaplanır
@@ -111,7 +111,7 @@ tests/                  Birim testleri
   - `src/data/bist.ts`: hisse kodu, adı ve sektörü **İş Yatırım**'dan, internet adresi **KAP**'tan
   - `src/data/us.ts`: kod, ad ve borsa **NASDAQ Trader** sembol dizininden, internet adresi **Wikidata**'dan (CC0)
   - `src/data/etf.ts`: ETF'ler yine **NASDAQ Trader** dizininden; logo için çıkaran şirketin (iShares, Vanguard, SPDR…) sitesi adından bulunur
-  - `src/data/funds.ts`: TEFAS (yatırım fonu) ve BES (emeklilik yatırım fonu) listeleri **KAP**'tan; logolar kurucu şirketin sitesinden
+  - `src/data/funds.ts`: TEFAS (yatırım fonu) ve BES (emeklilik yatırım fonu) listeleri **KAP**'tan, KAP'ta olmayan ama TEFAS'ta işlem görenler **TEFAS**'ın fon listesinden; logolar kurucu şirketin sitesinden
   - `src/data/crypto.ts`: **CoinGecko**'dan ilk 500 coin (logolarıyla)
 - Fiyatlar:
   - Hisse, ETF, döviz, emtia ve endeksler (XU100, ^SP500TR): Yahoo Finance
@@ -119,7 +119,7 @@ tests/                  Birim testleri
   - Enflasyon (TÜİK TÜFE): TCMB enflasyon sayfası (`www.tcmb.gov.tr`, Ocak 2005'ten bu yana aylık değişimler). Alınamazsa OECD istatistik servisi (`sdmx.oecd.org`, Aralık 2025'e kadar). TCMB sitesi tarayıcıdan erişime izin vermediği için web sürümünde OECD kullanılır.
   - Kripto: CoinGecko, coin kimliğiyle; aynı kısaltmalı coinler karışmaz
   - Eurobond: Ziraat Bankası'nın eurobond sayfasındaki günlük tablo (bankanın alış fiyatı ve getirisi; değer bu fiyatla hesaplanır)
-  - Fonlar (TEFAS/BES): **elle girilir.** Günlük fon fiyatları yalnız TEFAS'ta var ve TEFAS sitesi otomatik erişime karşı korunuyor. Lisanslı bir veri kaynağı bağlanınca otomatik olabilir.
+  - Fonlar (TEFAS/BES): **TEFAS'ın açık fon servisi** (`tefas.gov.tr/api/funds/fonGnlBlgSiraliGetir`; 2026'da eski servisin yerine geldi, giriş gerektirmez). Portföydeki birkaç fon için fon başına son iki haftanın fiyatı, listeler için bir fon türündeki bütün fonların son iki işlem günü tek istekte alınır; günlük değişim bu iki günden hesaplanır.
 - ABD'de bilinen şirketlerin hepsinin internet adresi var. Wikidata'da kaydı olmayan küçük şirketlerde (yaklaşık 3.700) harf rozeti görünür.
 - Logolar uygulama çalışırken şirketin kendi sitesinden alınır. Sıra şöyle:
   1. Sitenin büyük simgesi (`apple-touch-icon`)
@@ -137,7 +137,8 @@ python3 -I scripts/fetch-us-sources.py /tmp/us
 python3 -I scripts/build-us-data.py /tmp/us/us-stocks.json /tmp/us/us-sites.json > src/data/us.ts
 python3 -I scripts/build-etf-data.py /tmp/us/us-etfs.json > src/data/etf.ts
 python3 -I scripts/fetch-fund-sources.py /tmp/fon       # pdftotext gerekir (poppler-utils)
-python3 -I scripts/build-fund-data.py /tmp/fon/funds.json > src/data/funds.ts
+python3 -I scripts/fetch-tefas-funds.py /tmp/tefas
+python3 -I scripts/build-fund-data.py /tmp/fon/funds.json /tmp/tefas/tefas-YAT.json /tmp/tefas/tefas-EMK.json > src/data/funds.ts
 python3 -I scripts/fetch-crypto-sources.py /tmp/kripto
 python3 -I scripts/build-crypto-data.py /tmp/kripto/crypto.json > src/data/crypto.ts
 curl -sL -o /tmp/ziraat-eurobond.html https://www.ziraatbank.com.tr/tr/bireysel/yatirim/eurobond
@@ -186,7 +187,7 @@ Göndermeden önce `app.json` içindeki `ios.bundleIdentifier` değerini (şu an
   - Yayına çıkmadan önce lisanslı bir veri sağlayıcı düşünülmeli.
   - Sağlayıcı değişirse yalnızca `src/lib/prices.ts` değişir.
 - Geçmiş kurlar da Yahoo Finance'ten günlük kapanış olarak alınıyor. Gün içi kur farkı dikkate alınmıyor.
-- TEFAS/BES fon fiyatları elle giriliyor (yukarıda nedeni yazıyor).
+- TEFAS fon servisi resmi olarak belgelenmemiştir; değişirse fon fiyatları gelmez (o zaman fiyat elle girilebilir).
 - Türkiye CDS'i yok: güncel CDS yayımlayan siteler (investing.com, Bloomberg HT, doviz.com) ya ücretli ya da otomatik veri çekmeye izin vermiyor; ücretsiz `fveri.com` verisi Haziran 2026'da kalmış. Lisanslı bir kaynak bulununca Kurlar bölümüne eklenebilir.
 - TÜFE, TCMB sayfasındaki tablodan okunuyor; sayfanın düzeni değişirse okuma bozulabilir (o zaman OECD'ye düşer). Daha sağlam yol TCMB EVDS servisi (`evds3.tcmb.gov.tr`, ücretsiz ama kişisel API anahtarı ister).
 - Veriler yalnızca telefonda duruyor. Uygulama silinirse veriler de silinir. Yedekleme ileride eklenebilir.

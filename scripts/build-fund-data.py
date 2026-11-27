@@ -1,7 +1,11 @@
 """src/data/funds.ts dosyasını üretir (scripts/fetch-fund-sources.py çıktısından).
 
+KAP listesine, TEFAS'ın açık servisinde işlem gören ama KAP listesinde olmayan fonlar da eklenir
+(scripts/fetch-tefas-funds.py çıktısı); şirketleri fon adının başından, KAP'taki şirketlerle eşleştirilir.
+
 Kullanım:
-  python3 -I scripts/build-fund-data.py <funds.json> > src/data/funds.ts
+  python3 -I scripts/fetch-tefas-funds.py /tmp/tefas
+  python3 -I scripts/build-fund-data.py <funds.json> /tmp/tefas/tefas-YAT.json /tmp/tefas/tefas-EMK.json > src/data/funds.ts
 """
 import json
 import re
@@ -9,6 +13,7 @@ import sys
 from datetime import date
 
 funds = json.load(open(sys.argv[1], encoding='utf-8'))
+tefas_lists = {'TEFAS': sys.argv[2] if len(sys.argv) > 2 else None, 'BES': sys.argv[3] if len(sys.argv) > 3 else None}
 
 # KAP'ta genel bilgi sayfası olmayan emeklilik şirketlerinin bilinen resmi siteleri (logo için).
 MANUAL_SITES = {
@@ -92,6 +97,45 @@ def site_for(f):
     return None
 
 
+def company_prefix(company):
+    """Fon adlarının başında geçen şirket öneki: "ATA PORTFÖY YÖNETİMİ A.Ş." → "ATA PORTFÖY"."""
+    c = re.sub(r'\s*A\.Ş\.?$', '', company.strip().upper())
+    i = c.find('PORTFÖY')
+    return c[: i + len('PORTFÖY')] if i > 0 else c
+
+
+def add_tefas_funds():
+    """TEFAS'ta olup KAP listesinde olmayan fonları ekler."""
+    known = {(f['type'], f['code']) for f in funds}
+    companies = {}
+    for f in funds:
+        companies.setdefault(company_prefix(f['company']), f)
+    prefixes = sorted(companies, key=len, reverse=True)
+    for kind, path in tefas_lists.items():
+        if not path:
+            continue
+        added = 0
+        for t in json.load(open(path, encoding='utf-8')):
+            if (kind, t['code']) in known:
+                continue
+            name = t['name'].strip()
+            upper = name.upper()
+            match = next((companies[p] for p in prefixes if upper.startswith(p + ' ') or upper.startswith(p)), None)
+            if kind == 'BES':
+                m = re.match(r'^(.*?A\.Ş\.?)\s', name)
+                company = m.group(1) if m else (match['company'] if match else '')
+            else:
+                company = match['company'] if match else ''
+            funds.append({'type': kind, 'code': t['code'], 'name': name, 'company': company or 'TEFAS',
+                          'website': match.get('website') if match else None})
+            added += 1
+        print(f'{kind}: TEFAS listesinden {added} fon eklendi', file=sys.stderr)
+
+
+add_tefas_funds()
+funds.sort(key=lambda f: (f['type'], f['code']))
+
+
 def rows(kind):
     out = []
     for f in funds:
@@ -107,7 +151,7 @@ def rows(kind):
 
 
 print(f"""// Bu dosya scripts/build-fund-data.py ile üretildi ({date.today().isoformat()}). Elle düzenlemeyin.
-// Kaynak: KAP yatırım fonu (YF → TEFAS) ve emeklilik yatırım fonu (EYF → BES) listeleri.
+// Kaynak: KAP yatırım fonu (YF → TEFAS) ve emeklilik yatırım fonu (EYF → BES) listeleri, TEFAS fon listesi.
 
 export interface FundInfo {{
   code: string;

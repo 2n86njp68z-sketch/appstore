@@ -227,8 +227,16 @@ export function priceFactor(kind: AssetKind): number {
   return kind === 'eurobond' ? 0.01 : 1;
 }
 
-/** Fiyatı elle girilen türler (fon fiyatları otomatik alınamıyor). */
+/** Fiyatı yalnız elle girilen türler ("Diğer": mevduat vb.). */
 export function isManualPriced(kind: AssetKind): boolean {
+  return kind === 'other';
+}
+
+/**
+ * Fiyatı elle de girilebilen türler: "Diğer" ve fonlar. Fon fiyatları TEFAS'tan otomatik gelir; TEFAS'ta
+ * işlem görmeyen bir fonun fiyatı elle girilebilir.
+ */
+export function allowsManualPrice(kind: AssetKind): boolean {
   return kind === 'other' || kind === 'fund' || kind === 'bes';
 }
 
@@ -277,8 +285,11 @@ export function quoteSymbolFor(kind: AssetKind, symbol: string): string | null {
       return `${symbol}TRY=X`;
     case 'metal':
       return METAL_SOURCE[symbol] ?? null;
+    // TEFAS fon servisi: yatırım fonları "YAT", emeklilik (BES) fonları "EMK"
     case 'fund':
+      return `TEFAS:YAT:${symbol}`;
     case 'bes':
+      return `TEFAS:EMK:${symbol}`;
     case 'other':
       return null;
   }

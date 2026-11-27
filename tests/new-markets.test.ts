@@ -12,7 +12,14 @@ import {
 } from '../src/lib/assets';
 import { MARKETS, searchStocks, stockInfo } from '../src/lib/markets';
 import { computeHoldings, requiredQuoteSymbols, resolveAssetQuote } from '../src/lib/portfolio';
-import { fetchAnyQuotes, fetchCoinGecko, parseCoinGecko } from '../src/lib/prices';
+import {
+  fetchAnyQuotes,
+  fetchCoinGecko,
+  fetchTefasQuotes,
+  parseCoinGecko,
+  parseTefasRows,
+  tefasQuotes,
+} from '../src/lib/prices';
 import type { RawQuote, Transaction } from '../src/lib/types';
 
 const close = (a: number, b: number, eps = 1e-6) => assert.ok(Math.abs(a - b) < eps, `${a} ≈ ${b}`);
@@ -93,18 +100,34 @@ test('TEFAS ve BES fonları: listeler, elle fiyat, şirket adıyla arama', () =>
   );
   assert.equal(searchStocks('aft', MARKETS.fund.stocks)[0].code, 'AFT');
 
-  assert.ok(isManualPriced('fund') && isManualPriced('bes'));
-  assert.equal(quoteSymbolFor('fund', 'AFT'), null);
-  assert.deepEqual(MARKETS.fund.quoteKeys('AFT'), []);
+  // Fon fiyatları TEFAS'tan otomatik; TEFAS'ta fiyatı olmayan fonun fiyatı elle girilebilir
+  assert.ok(!isManualPriced('fund') && !isManualPriced('bes') && isManualPriced('other'));
+  assert.equal(quoteSymbolFor('fund', 'AFT'), 'TEFAS:YAT:AFT');
+  assert.equal(quoteSymbolFor('bes', 'AE1'), 'TEFAS:EMK:AE1');
+  assert.deepEqual(MARKETS.fund.quoteKeys('AFT'), ['TEFAS:YAT:AFT']);
+  assert.equal(MARKETS.fund.manual, false);
   assert.equal(resolveAssetQuote('fund', 'AFT', {}, {}), undefined);
   assert.equal(resolveAssetQuote('fund', 'AFT', {}, { 'fund:AFT': 1.25 })?.price, 1.25);
+  assert.equal(
+    resolveAssetQuote('fund', 'AFT', { 'TEFAS:YAT:AFT': { price: 1.3, fetchedAt: 1 } }, { 'fund:AFT': 1.25 })?.price,
+    1.3,
+  );
   const txs: Transaction[] = [
     { id: '1', kind: 'fund', symbol: 'AFT', side: 'buy', quantity: 1000, price: 1, date: '2026-01-01', createdAt: 1 },
   ];
-  assert.deepEqual(requiredQuoteSymbols(txs).sort(), ['EURTRY=X', 'USDTRY=X']);
+  assert.deepEqual(requiredQuoteSymbols(txs).sort(), ['EURTRY=X', 'TEFAS:YAT:AFT', 'USDTRY=X']);
   const [h] = computeHoldings(txs, raw, { 'fund:AFT': 1.2 });
   close(h.marketValue, 1200);
+  assert.equal(h.priceManual, true);
   assert.match(h.name, /^Ak Portföy/);
+  const [auto] = computeHoldings(
+    txs,
+    { ...raw, 'TEFAS:YAT:AFT': { price: 1.5, previousClose: 1.4, fetchedAt: 1 } },
+    {},
+  );
+  close(auto.marketValue, 1500);
+  close(auto.dayChange!, 100);
+  assert.equal(auto.priceManual, false);
 });
 
 test('kripto: liste CoinGecko kimliğiyle, logolu', () => {
@@ -149,4 +172,78 @@ test('fetchAnyQuotes: CG anahtarları CoinGecko, diğerleri Yahoo', async () => 
   calls.length = 0;
   await fetchCoinGecko(many, fn);
   assert.equal(calls.length, 2);
+});
+
+const TEFAS_JSON = (rows: [string, string, number][]) => ({
+  errorCode: null,
+  errorMessage: null,
+  resultList: rows.map(([fonKodu, tarih, fiyat], i) => ({ fonKodu, fonUnvan: 'X', tarih, fiyat, rn: i + 1 })),
+});
+
+test('TEFAS fon servisi: son fiyat ve önceki gün, satırlar bozuksa atlanır', () => {
+  const rows = parseTefasRows(
+    TEFAS_JSON([
+      ['AAL', '2026-11-26', 3.78],
+      ['AAL', '2026-11-25', 3.76],
+      ['AAL', '2026-11-24', 3.75],
+      ['AFT', '2026-11-26', 0.74],
+      ['BOZ', '2026-11-26', 0],
+    ]),
+  );
+  assert.equal(rows.length, 4);
+  const q = tefasQuotes(rows, 'YAT', 9);
+  assert.deepEqual(Object.keys(q).sort(), ['TEFAS:YAT:AAL', 'TEFAS:YAT:AFT']);
+  close(q['TEFAS:YAT:AAL'].price, 3.78);
+  close(q['TEFAS:YAT:AAL'].previousClose!, 3.76);
+  assert.equal(q['TEFAS:YAT:AFT'].previousClose, undefined);
+  assert.deepEqual(parseTefasRows({ errorMessage: 'x' }), []);
+});
+
+test('fetchTefasQuotes: az fonda fon başına, çok fonda iki günlük toplu istek; POST gövdesi', async () => {
+  const bodies: { fonTipi: string; fonKodu: string | null; basTarih: string; bitTarih: string }[] = [];
+  const fn = async (url: string, init?: { method?: string; body?: string }) => {
+    assert.equal(init?.method, 'POST');
+    assert.match(url, /tefas\.gov\.tr\/api\/funds\/fonGnlBlgSiraliGetir/);
+    const b = JSON.parse(init!.body!);
+    bodies.push(b);
+    if (b.fonKodu) {
+      return {
+        ok: true,
+        status: 200,
+        json: async () =>
+          TEFAS_JSON([
+            [b.fonKodu, '2026-11-26', 2],
+            [b.fonKodu, '2026-11-25', 1.9],
+          ]),
+      };
+    }
+    return {
+      ok: true,
+      status: 200,
+      json: async () =>
+        TEFAS_JSON(
+          Array.from(
+            { length: 20 },
+            (_, i) => [`F${String(i).padStart(2, '0')}`, '2026-11-26', 1 + i] as [string, string, number],
+          ),
+        ),
+    };
+  };
+  const now = new Date('2026-11-27T10:00:00Z');
+  const few = await fetchTefasQuotes(['TEFAS:EMK:AE1', 'TEFAS:EMK:AH1'], fn, now);
+  assert.deepEqual(Object.keys(few).sort(), ['TEFAS:EMK:AE1', 'TEFAS:EMK:AH1']);
+  close(few['TEFAS:EMK:AE1'].previousClose!, 1.9);
+  assert.ok(
+    bodies.every((b) => b.fonTipi === 'EMK' && b.fonKodu && b.bitTarih === '20261127' && b.basTarih === '20261113'),
+  );
+
+  bodies.length = 0;
+  const many = Array.from({ length: 20 }, (_, i) => `TEFAS:YAT:F${String(i).padStart(2, '0')}`);
+  const all = await fetchTefasQuotes(many, fn, now);
+  assert.equal(Object.keys(all).length, 20);
+  // Önce son günleri bulmak için tek fon, sonra son iki işlem gününün toplu listesi
+  assert.equal(bodies.length, 2);
+  assert.equal(bodies[1].fonKodu, null);
+  assert.equal(bodies[1].basTarih, '20261125');
+  assert.equal(bodies[1].bitTarih, '20261126');
 });

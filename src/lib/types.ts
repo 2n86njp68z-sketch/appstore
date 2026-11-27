@@ -76,6 +76,8 @@ export interface Holding {
 
   /** Fiyat alınamadıysa true; değer maliyet üzerinden gösterilir. */
   priceMissing: boolean;
+  /** Fiyat elle girildiyse true. */
+  priceManual?: boolean;
   price: number;
   previousClose?: number;
   marketValue: number;

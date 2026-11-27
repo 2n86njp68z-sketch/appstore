@@ -10,7 +10,7 @@ const TIMEOUT_MS = 10_000;
 
 type FetchLike = (
   url: string,
-  init?: { signal?: AbortSignal; headers?: Record<string, string> },
+  init?: { signal?: AbortSignal; headers?: Record<string, string>; method?: string; body?: string },
 ) => Promise<{
   ok: boolean;
   status: number;
@@ -343,13 +343,15 @@ export async function fetchAnyQuotes(
 ): Promise<Record<string, RawQuote>> {
   const cg = keys.filter((k) => k.startsWith('CG:')).map((k) => k.slice(3));
   const eb = keys.filter((k) => k.startsWith('EB:'));
-  const yahoo = keys.filter((k) => !k.startsWith('CG:') && !k.startsWith('EB:'));
-  const [a, b, e] = await Promise.all([
+  const tf = keys.filter((k) => k.startsWith('TEFAS:'));
+  const yahoo = keys.filter((k) => !k.startsWith('CG:') && !k.startsWith('EB:') && !k.startsWith('TEFAS:'));
+  const [a, b, e, t] = await Promise.all([
     cg.length ? fetchCoinGecko(cg, fetchFn) : Promise.resolve({}),
     yahoo.length ? fetchQuotesBatched(yahoo, fetchFn, fallbackLimit) : Promise.resolve({}),
     eb.length ? fetchEurobondQuotes(eb, fetchFn).catch(() => ({})) : Promise.resolve({}),
+    tf.length ? fetchTefasQuotes(tf, fetchFn).catch(() => ({})) : Promise.resolve({}),
   ]);
-  return { ...a, ...b, ...e };
+  return { ...a, ...b, ...e, ...t };
 }
 
 // ---------------------------------------------------------------------------
@@ -624,4 +626,171 @@ export async function fetchBistIndex(
   if (live?.before) series = withPoint(series, live.before);
   if (live?.current) series = withPoint(series, live.current);
   return { ...series, fetchedAt: Date.now() };
+}
+
+// ---------------------------------------------------------------------------
+// TEFAS ve BES fon fiyatları: TEFAS'ın açık fon servisi (2026'da eski servisin yerine geldi; giriş
+// gerektirmez). Tek istekte bir fon türündeki bütün fonların ya da tek fonun tarih aralığındaki günlük
+// fiyatlarını verir. Anahtar: "TEFAS:YAT:<kod>" (yatırım fonu) ve "TEFAS:EMK:<kod>" (BES).
+
+const TEFAS_API = 'https://www.tefas.gov.tr/api/funds/fonGnlBlgSiraliGetir';
+export type TefasType = 'YAT' | 'EMK';
+/** Bu kadar ya da daha az fon için fon başına küçük istek, fazlası için toplu istek. */
+const TEFAS_PER_FUND_LIMIT = 12;
+const TEFAS_TTL_MS = 30 * 60 * 1000;
+
+interface TefasRow {
+  code: string;
+  date: string;
+  price: number;
+}
+
+/** TEFAS yanıtındaki satırlar (fon kodu, tarih "YYYY-AA-GG", fiyat). */
+export function parseTefasRows(json: unknown): TefasRow[] {
+  const list = (json as { resultList?: unknown })?.resultList;
+  if (!Array.isArray(list)) return [];
+  const out: TefasRow[] = [];
+  for (const r of list as { fonKodu?: unknown; tarih?: unknown; fiyat?: unknown }[]) {
+    const price = Number(r?.fiyat);
+    if (typeof r?.fonKodu !== 'string' || typeof r.tarih !== 'string' || !(price > 0)) continue;
+    out.push({ code: r.fonKodu, date: r.tarih.slice(0, 10), price });
+  }
+  return out;
+}
+
+/** Her fonun son iki günü: son fiyat ve bir önceki günün fiyatı (günlük değişim için). */
+export function tefasQuotes(rows: TefasRow[], type: TefasType, now: number = Date.now()): Record<string, RawQuote> {
+  const byCode = new Map<string, TefasRow[]>();
+  for (const r of rows) {
+    const list = byCode.get(r.code);
+    if (list) list.push(r);
+    else byCode.set(r.code, [r]);
+  }
+  const out: Record<string, RawQuote> = {};
+  for (const [code, list] of byCode) {
+    list.sort((a, b) => (a.date < b.date ? 1 : -1));
+    out[`TEFAS:${type}:${code}`] = { price: list[0].price, previousClose: list[1]?.price, fetchedAt: now };
+  }
+  return out;
+}
+
+const ymd = (d: Date) => d.toISOString().slice(0, 10).replace(/-/g, '');
+
+async function tefasPost(
+  fetchFn: FetchLike,
+  type: TefasType,
+  code: string | null,
+  from: Date,
+  to: Date,
+): Promise<TefasRow[]> {
+  const body = {
+    fonTipi: type,
+    fonKodu: code,
+    aramaMetni: null,
+    fonTurKod: null,
+    fonGrubu: null,
+    sfonTurKod: null,
+    fonTurAciklama: null,
+    kurucuKod: null,
+    basTarih: ymd(from),
+    bitTarih: ymd(to),
+    basSira: 1,
+    bitSira: 100000,
+    dil: 'TR',
+    sFonTurKod: '',
+    fonKod: '',
+    fonGrup: '',
+    fonUnvanTip: '',
+  };
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 30_000);
+  try {
+    const res = await fetchFn(TEFAS_API, {
+      method: 'POST',
+      signal: controller.signal,
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return parseTefasRows(await res.json());
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+const tefasBulkCache = new Map<TefasType, { at: number; data: Promise<Record<string, RawQuote>> }>();
+/** Son işlem günlerini bulmak için sorulan, uzun süredir işlem gören büyük fonlar. */
+const TEFAS_PROBES: Record<TefasType, string[]> = { YAT: ['TTE', 'AFT', 'AAL'], EMK: ['AE1', 'ABE', 'AH1'] };
+
+/**
+ * Bir türdeki bütün fonların son iki işlem günü fiyatı. Önce bir fonun son günleri sorulup son iki işlem
+ * günü bulunur, sonra yalnız o iki günün bütün fiyatları istenir (tatil ve hafta sonları atlanır).
+ */
+function tefasBulk(type: TefasType, probe: string, fetchFn: FetchLike, now: Date): Promise<Record<string, RawQuote>> {
+  const hit = tefasBulkCache.get(type);
+  if (hit && Date.now() - hit.at < TEFAS_TTL_MS) return hit.data;
+  const data = (async () => {
+    let dates: string[] = [];
+    // İstenen fon TEFAS'ta işlem görmüyorsa bilinen büyük fonlarla denenir.
+    for (const code of [probe, ...TEFAS_PROBES[type].filter((c) => c !== probe)]) {
+      const days = await tefasPost(fetchFn, type, code, new Date(now.getTime() - 14 * 86_400_000), now).catch(() => []);
+      dates = [...new Set(days.map((r) => r.date))].sort().reverse();
+      if (dates.length) break;
+    }
+    if (dates.length === 0) throw new Error('TEFAS fiyatı yok');
+    const last = new Date(`${dates[0]}T00:00:00Z`);
+    const prev = new Date(`${dates[1] ?? dates[0]}T00:00:00Z`);
+    return tefasQuotes(await tefasPost(fetchFn, type, null, prev, last), type);
+  })();
+  tefasBulkCache.set(type, { at: Date.now(), data });
+  data.catch(() => tefasBulkCache.delete(type));
+  return data;
+}
+
+/** TEFAS ve BES fon fiyatları ("TEFAS:YAT:<kod>", "TEFAS:EMK:<kod>" anahtarlarıyla). */
+export async function fetchTefasQuotes(
+  keys: string[],
+  fetchFn: FetchLike = fetch as unknown as FetchLike,
+  now: Date = new Date(),
+): Promise<Record<string, RawQuote>> {
+  if (WEB_DATA_BASE) return webQuotes(keys, fetchFn);
+  const groups = new Map<TefasType, string[]>();
+  for (const k of keys) {
+    const [, type, code] = k.split(':');
+    if ((type !== 'YAT' && type !== 'EMK') || !code) continue;
+    const list = groups.get(type);
+    if (list) list.push(code);
+    else groups.set(type, [code]);
+  }
+  const out: Record<string, RawQuote> = {};
+  for (const [type, codes] of groups) {
+    const unique = [...new Set(codes)];
+    if (unique.length <= TEFAS_PER_FUND_LIMIT && !tefasBulkCache.has(type)) {
+      // Portföydeki birkaç fon: fon başına son iki haftanın fiyatları (en fazla 4 istek aynı anda)
+      const from = new Date(now.getTime() - 14 * 86_400_000);
+      for (let i = 0; i < unique.length; i += 4) {
+        const part = unique.slice(i, i + 4);
+        const settled = await Promise.allSettled(part.map((c) => tefasPost(fetchFn, type, c, from, now)));
+        settled.forEach((r) => {
+          if (r.status === 'fulfilled') Object.assign(out, tefasQuotes(r.value, type));
+        });
+      }
+    } else {
+      const all = await tefasBulk(type, unique[0], fetchFn, now);
+      for (const c of unique) {
+        const k = `TEFAS:${type}:${c}`;
+        if (all[k]) out[k] = all[k];
+      }
+    }
+  }
+  return out;
+}
+
+/** Bir türdeki bütün fonların fiyatı (web sürümünün saatlik verisi için). */
+export async function fetchAllTefasQuotes(
+  type: TefasType,
+  probe: string,
+  fetchFn: FetchLike = fetch as unknown as FetchLike,
+): Promise<Record<string, RawQuote>> {
+  return tefasBulk(type, probe, fetchFn, new Date());
 }

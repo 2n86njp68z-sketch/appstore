@@ -77,8 +77,8 @@ export const MARKETS: Record<MarketKey, MarketDef> = {
   us: market('us', 'us', 'ABD Market', US_STOCKS),
   etf: market('etf', 'etf', 'ABD ETF', US_ETFS),
   metal: market('metal', 'metal', 'Emtia', COMMODITY_STOCKS),
-  fund: market('fund', 'fund', 'TEFAS', TEFAS_FUNDS, true),
-  bes: market('bes', 'bes', 'BES', BES_FUNDS, true),
+  fund: market('fund', 'fund', 'TEFAS', TEFAS_FUNDS),
+  bes: market('bes', 'bes', 'BES', BES_FUNDS),
   crypto: market('crypto', 'crypto', 'Kripto', CRYPTO_COINS),
   eurobond: market('eurobond', 'eurobond', 'Eurobond', EUROBOND_STOCKS),
 };

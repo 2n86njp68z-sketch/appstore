@@ -240,7 +240,7 @@ export default function AddTransactionScreen() {
           />
           {(kind === 'fund' || kind === 'bes') && (
             <Text style={[styles.hint, { color: c.textTertiary }]}>
-              Fon fiyatları otomatik alınamıyor. Alış fiyatını gir; güncel fiyatı fonun sayfasından güncelleyebilirsin.
+              {"Fon fiyatları TEFAS'tan her gün otomatik gelir. Alış fiyatını, aldığın günün fon fiyatı olarak gir."}
             </Text>
           )}
         </Field>

@@ -1,4 +1,5 @@
 import {
+  allowsManualPrice,
   assetCurrency,
   assetKey,
   commodityInfo,
@@ -113,7 +114,14 @@ export function resolveAssetQuote(
   }
   const s = quoteSymbolFor(kind, symbol);
   const q = s ? raw[s] : undefined;
-  if (!q) return undefined;
+  if (!q) {
+    // TEFAS'ta fiyatı olmayan fon: elle girilmiş fiyat varsa o
+    if (allowsManualPrice(kind)) {
+      const p = manualPrices[assetKey(kind, symbol)];
+      if (p != null && Number.isFinite(p)) return { price: p, manual: true };
+    }
+    return undefined;
+  }
   return { price: q.price, previousClose: q.previousClose, name: q.name, fetchedAt: q.fetchedAt, yieldPct: q.yieldPct };
 }
 
@@ -288,6 +296,7 @@ export function computeHoldings(
       costBasis: pos.costBasis,
       realizedPnl: pos.realizedPnl,
       priceMissing,
+      priceManual: quote?.manual === true,
       price,
       previousClose: prev,
       marketValue,

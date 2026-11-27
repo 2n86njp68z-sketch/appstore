@@ -220,7 +220,16 @@ type SectionDef = SectionLook &
   );
 
 const SECTION_DEFS: SectionDef[] = [
-  // Türk bayraklılar, ABD bayraklılar alt alta; ardından emtia, kripto, endeksler ve kurlar.
+  // En üstte Karşılaştır (herkes görsün); sonra Türk bayraklılar, ABD bayraklılar, emtia, kripto,
+  // endeksler ve kurlar.
+  {
+    key: 'compare',
+    title: COMPARE_LINKS.title,
+    links: true,
+    group: 'Araçlar',
+    accent: '#7C5CFF',
+    subtitle: 'Getirileri aynı grafikte gör',
+  },
   {
     key: 'bist',
     title: 'Türk Market',
@@ -308,14 +317,6 @@ const SECTION_DEFS: SectionDef[] = [
     group: 'Piyasa özeti',
     accent: '#14B8A6',
     subtitle: 'Dolar ve Euro',
-  },
-  {
-    key: 'compare',
-    title: COMPARE_LINKS.title,
-    links: true,
-    group: 'Araçlar',
-    accent: '#7C5CFF',
-    subtitle: 'Getirileri aynı grafikte gör',
   },
 ];
 
@@ -698,8 +699,9 @@ function MarketDrawer({ open, onClose }: { open: boolean; onClose: () => void })
 
         <SectionList
           sections={sections}
-          ListHeaderComponent={
-            searching ? undefined : (
+          // Piyasa nabzı en üstteki Karşılaştır bölümünün hemen altında
+          renderSectionFooter={({ section }) =>
+            !searching && section.key === 'compare' ? (
               <PulseStrip
                 quotes={allQuotes}
                 onTouchStart={() => {
@@ -709,7 +711,7 @@ function MarketDrawer({ open, onClose }: { open: boolean; onClose: () => void })
                   stripTouching = false;
                 }}
               />
-            )
+            ) : null
           }
           keyExtractor={(item) => item.key}
           stickySectionHeadersEnabled

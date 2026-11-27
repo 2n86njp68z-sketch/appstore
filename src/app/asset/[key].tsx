@@ -6,7 +6,7 @@ import { AssetIcon } from '@/components/asset-icon';
 import { Card, PrimaryButton, SectionTitle, StatRow } from '@/components/ui';
 import { Font, pnlColor, useColors } from '@/constants/theme';
 import { usePortfolio } from '@/context/portfolio-context';
-import { displaySymbol, isManualPriced, kindInfo, priceFactor, quantityUnit } from '@/lib/assets';
+import { allowsManualPrice, displaySymbol, isManualPriced, kindInfo, priceFactor, quantityUnit } from '@/lib/assets';
 import {
   currencySymbol,
   formatMoney,
@@ -95,7 +95,8 @@ export default function AssetScreen() {
             </Text>
           )}
 
-          {isManualPriced(h.kind) &&
+          {/* Diğer varlıklarda her zaman; fonlarda yalnız TEFAS fiyatı gelmezse */}
+          {(isManualPriced(h.kind) || (allowsManualPrice(h.kind) && (h.priceMissing || h.priceManual))) &&
             (editingPrice ? (
               <View style={styles.priceEdit}>
                 <TextInput
