@@ -33,6 +33,57 @@ export function parseYahooChart(json: unknown, now: number = Date.now()): RawQuo
   return { price, previousClose: prev, name: name?.trim(), fetchedAt: now };
 }
 
+// ---------------------------------------------------------------------------
+// Web sürümü (GitHub Pages): Yahoo, Borsa İstanbul ve TCMB tarayıcıdan erişime (CORS) izin vermediği için
+// GitHub saatte bir bu verileri çekip sitenin yanına koyar (scripts/build-web-data.ts). Derlemede
+// EXPO_PUBLIC_WEB_DATA verilirse (ör. "/appstore/data") fiyatlar bu dosyalardan okunur; telefondaki
+// uygulamada bu değer yoktur ve veriler doğrudan kaynaklarından gelir. Kripto (CoinGecko) her zaman canlı.
+
+export const WEB_DATA_BASE: string | null = process.env.EXPO_PUBLIC_WEB_DATA || null;
+
+/** Geçmiş dosyasının adı: "USDTRY=X" → "USDTRY_X", "^SP500TR" → "_SP500TR". */
+export function webDataFileName(symbol: string): string {
+  return symbol.replace(/[^A-Za-z0-9.-]/g, '_');
+}
+
+export interface WebQuotesFile {
+  generatedAt: number;
+  quotes: Record<string, RawQuote>;
+}
+
+export interface WebBenchFile {
+  generatedAt: number;
+  /** "XU100_CFNNTLTL" (BIST 100 getiri endeksi) ve "CPI" (TÜFE endeksi). */
+  series: Record<string, FxSeries>;
+}
+
+const WEB_TTL_MS = 10 * 60 * 1000;
+const webCache = new Map<string, { at: number; data: Promise<unknown> }>();
+
+/** Web veri dosyası; 10 dakika bellekte tutulur. */
+function webJson<T>(name: string, fetchFn: FetchLike): Promise<T> {
+  const hit = webCache.get(name);
+  if (hit && Date.now() - hit.at < WEB_TTL_MS) return hit.data as Promise<T>;
+  const data = fetchWithTimeout(fetchFn, `${WEB_DATA_BASE}/${name}`, 20_000).then(async (res) => {
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return res.json();
+  });
+  webCache.set(name, { at: Date.now(), data });
+  data.catch(() => webCache.delete(name));
+  return data as Promise<T>;
+}
+
+async function webQuotes(symbols: string[], fetchFn: FetchLike): Promise<Record<string, RawQuote>> {
+  const { quotes } = await webJson<WebQuotesFile>('quotes.json', fetchFn);
+  return Object.fromEntries(symbols.filter((s) => quotes[s]).map((s) => [s, quotes[s]]));
+}
+
+async function webBench(key: string, fetchFn: FetchLike): Promise<FxSeries> {
+  const { series } = await webJson<WebBenchFile>('bench.json', fetchFn);
+  if (!series?.[key]) throw new Error(`${key} verisi yok`);
+  return series[key];
+}
+
 async function fetchWithTimeout(fetchFn: FetchLike, url: string, timeoutMs = TIMEOUT_MS, accept = 'application/json') {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -47,6 +98,11 @@ export async function fetchQuote(
   symbol: string,
   fetchFn: FetchLike = fetch as unknown as FetchLike,
 ): Promise<RawQuote> {
+  if (WEB_DATA_BASE) {
+    const q = (await webQuotes([symbol], fetchFn))[symbol];
+    if (!q) throw new Error(`Sembol bulunamadı: ${symbol}`);
+    return q;
+  }
   const path = `/v8/finance/chart/${encodeURIComponent(symbol)}?range=1d&interval=1d`;
   let lastError: unknown;
   for (const host of HOSTS) {
@@ -126,6 +182,7 @@ export async function fetchHistory(
   range: string,
   fetchFn: FetchLike = fetch as unknown as FetchLike,
 ): Promise<FxSeries> {
+  if (WEB_DATA_BASE) return webJson<FxSeries>(`history/${webDataFileName(symbol)}.json`, fetchFn);
   const path = `/v8/finance/chart/${encodeURIComponent(symbol)}?range=${range}&interval=1d`;
   let lastError: unknown;
   for (const host of HOSTS) {
@@ -215,6 +272,7 @@ export async function fetchQuotesBatched(
   fallbackLimit = 30,
 ): Promise<Record<string, RawQuote>> {
   const unique = [...new Set(symbols)];
+  if (WEB_DATA_BASE) return webQuotes(unique, fetchFn);
   const out: Record<string, RawQuote> = {};
   for (let i = 0; i < unique.length; i += SPARK_CHUNK) {
     Object.assign(out, await fetchSpark(unique.slice(i, i + SPARK_CHUNK), fetchFn));
@@ -390,6 +448,7 @@ export async function fetchTurkeyCpi(
   fetchFn: FetchLike = fetch as unknown as FetchLike,
   { tcmb = true }: { tcmb?: boolean } = {},
 ): Promise<FxSeries> {
+  if (WEB_DATA_BASE) return webBench('CPI', fetchFn);
   if (tcmb) {
     try {
       const series = await fetchTcmbCpi(fetchFn);
@@ -485,6 +544,7 @@ export async function fetchBistIndex(
   cached?: FxSeries,
   fetchFn: FetchLike = fetch as unknown as FetchLike,
 ): Promise<FxSeries> {
+  if (WEB_DATA_BASE) return webBench(code, fetchFn);
   const url = (tur: string) => `${BIST_GRAPHIC}?veriTuru=${tur}&indexCode=${encodeURIComponent(code)}`;
   let live: ReturnType<typeof parseBistIndexCurrent> = null;
   try {

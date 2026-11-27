@@ -57,6 +57,18 @@ Expo (React Native) ile yazıldı. Geliştirmek ve App Store'a göndermek için 
 - **Kayıt:** Veriler yalnızca telefonda tutulur. Hesap ya da sunucu gerekmez.
 - **Görünüm:** Telefonun ayarına göre gündüz beyaz, gece siyah. Yazı tipi Manrope (₺ ve Türkçe harf destekli).
 
+## Web sürümü (link)
+
+Uygulamanın web sürümü GitHub Pages'te: **https://2n86njp68z-sketch.github.io/appstore/**
+
+- Telefondan ya da bilgisayardan linke dokunup açılır. Telefonda tarayıcı menüsünden "Ana Ekrana Ekle" denebilir.
+- Tarayıcılar Yahoo, Borsa İstanbul ve TCMB'ye doğrudan erişemediği için fiyatlar GitHub'da hazırlanır:
+  `.github/workflows/pages.yml` hafta içi saatte bir, hafta sonu günde bir `scripts/build-web-data.ts` ile tüm listelerin
+  (~12.300 sembol) fiyatlarını, kur/endeks geçmişlerini, BIST 100 getiri endeksini ve TÜFE'yi çekip sitenin yanına koyar
+  (`gh-pages` branch'i). Web sürümündeki fiyatlar bu yüzden en fazla bir saatlik olabilir; kripto canlıdır.
+- Veriler (işlemler) tarayıcıda, o cihazda saklanır.
+- Telefondaki uygulama bu dosyaları kullanmaz, verileri doğrudan kaynaklarından çeker.
+
 ## Proje yapısı
 
 ```

@@ -1,0 +1,78 @@
+# Uygulamanın web sürümünü GitHub Pages'te yayınlar: https://<kullanıcı>.github.io/appstore/
+# Tarayıcı Yahoo, Borsa İstanbul ve TCMB'ye doğrudan erişemediği için fiyatlar burada çekilip
+# hazır JSON dosyaları olarak sitenin yanına konur (scripts/build-web-data.ts) ve gh-pages branch'ine yazılır.
+# Hafta içi saatte bir, hafta sonu günde bir güncellenir. Telefondaki uygulama verileri doğrudan çeker.
+name: Web sürümünü yayınla
+
+on:
+  push:
+  schedule:
+    - cron: '23 * * * 1-5' # hafta içi her saatin 23. dakikası (UTC)
+    - cron: '23 12 * * 0,6' # hafta sonu günde bir (kripto canlı gelir)
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    # Push'larda yalnız varsayılan branch yayınlanır
+    if: github.event_name != 'push' || github.ref_name == github.event.repository.default_branch
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      SITE_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Zamanlanmış güncellemeyi canlı tut
+        # GitHub, 60 gün commit gelmeyen repolarda zamanlanmış iş akışlarını durdurur; 40 günde bir yenilenir.
+        if: github.event_name == 'schedule'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          age=$(( ($(date +%s) - $(git log -1 --format=%ct)) / 86400 ))
+          if [ "$age" -ge 40 ]; then
+            curl -fsS -X PUT -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+              "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/workflows/pages.yml/enable" \
+              && echo "Zamanlayıcı yenilendi"
+          fi
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Testler
+        run: npm test
+      - name: Fiyat ve endeks verilerini çek
+        run: npx tsx scripts/build-web-data.ts data "$SITE_URL/data/quotes.json"
+      - name: Web sürümünü derle
+        env:
+          CI: 1
+          WEB_BASE_URL: /${{ github.event.repository.name }}
+          EXPO_PUBLIC_WEB_DATA: /${{ github.event.repository.name }}/data
+        run: |
+          npx expo export -p web --output-dir site
+          cp -r data site/data
+          # Uygulama içi sayfalar (ör. /appstore/add) doğrudan açılınca da uygulama yüklensin
+          cp site/index.html site/404.html
+          # _expo klasörü Jekyll'e takılmasın
+          touch site/.nojekyll
+      - name: gh-pages branch'ine yaz
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cd site
+          git init -q -b gh-pages
+          git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git add -A
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+            commit -q -m "Web sürümü $(date -u +'%Y-%m-%d %H:%M') UTC"
+          # Tek commit'lik geçmiş: eski sürümler birikmesin
+          git push -q -f origin gh-pages
+          echo "Yayınlandı: $SITE_URL/"
