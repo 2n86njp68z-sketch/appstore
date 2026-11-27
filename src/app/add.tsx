@@ -16,6 +16,7 @@ import {
   isManualPriced,
   kindInfo,
   normalizeSymbol,
+  priceFactor,
   quantityLabelFor,
   quoteSymbolFor,
   USDTRY_SYMBOL,
@@ -69,7 +70,8 @@ export default function AddTransactionScreen() {
 
   const qty = parseDecimal(quantity);
   const unitPrice = parseDecimal(price);
-  const total = qty > 0 && unitPrice > 0 ? qty * unitPrice : undefined;
+  // Eurobondlarda fiyat 100 nominal başına
+  const total = qty > 0 && unitPrice > 0 ? qty * unitPrice * priceFactor(kind) : undefined;
 
   const inputStyle = [styles.input, { color: c.text, backgroundColor: c.background, borderColor: c.border }];
 
@@ -105,6 +107,9 @@ export default function AddTransactionScreen() {
   function save() {
     setError(undefined);
     if (!symbol) return setError('Sembol gerekli.');
+    if (kind === 'eurobond' && !/^[A-Z]{2}[A-Z0-9]{9}[0-9]$/.test(symbol)) {
+      return setError('Eurobond için 12 haneli ISIN kodunu gir (ör. US900123DF45).');
+    }
     if ((kind === 'fund' || kind === 'bes') && !/^[A-Z0-9]{3}$/.test(symbol)) {
       return setError('Fon kodu 3 karakter olmalı (ör. AFT).');
     }
@@ -209,7 +214,11 @@ export default function AddTransactionScreen() {
         </Field>
 
         <Field
-          label={`Birim fiyat (${currencySymbol(currency)})`}
+          label={
+            kind === 'eurobond'
+              ? `Fiyat (100 nominal, ${currencySymbol(currency)})`
+              : `Birim fiyat (${currencySymbol(currency)})`
+          }
           right={
             !manual ? (
               <Pressable onPress={fillCurrentPrice} disabled={fetchingPrice} hitSlop={8}>

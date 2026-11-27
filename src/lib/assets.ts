@@ -1,4 +1,5 @@
 import { CRYPTO_COINS } from '../data/crypto';
+import { EUROBONDS, type EurobondInfo } from '../data/eurobonds';
 import type { AssetKind, Currency } from './types';
 
 export const TROY_OUNCE_GRAMS = 31.1034768;
@@ -81,6 +82,15 @@ export const ASSET_KINDS: AssetKindInfo[] = [
     quantityLabel: 'Adet',
     placeholder: 'Fon kodu, örn. AEA',
     color: '#2B8A3E',
+  },
+  {
+    kind: 'eurobond',
+    label: 'Eurobond',
+    shortLabel: 'Eurobond',
+    currency: 'USD',
+    quantityLabel: 'Nominal',
+    placeholder: 'US900123DF45',
+    color: '#1D4ED8',
   },
   {
     kind: 'other',
@@ -185,7 +195,36 @@ const CRYPTO_IDS = new Map(CRYPTO_COINS.map((c) => [c.code, c.id]));
 /** Varlığın fiyatlandığı para birimi (ör. Ons Altın USD, Gram Altın TL). */
 export function assetCurrency(kind: AssetKind, symbol: string): Currency {
   if (kind === 'metal') return commodityInfo(symbol)?.currency ?? 'TRY';
+  if (kind === 'eurobond') return eurobondInfo(symbol)?.currency ?? 'USD';
   return kindInfo(kind).currency;
+}
+
+// ---------------------------------------------------------------------------
+// Eurobond: T.C. Hazine eurobondları. Fiyat 100 nominal başına verilir (ör. 98,50); değer
+// nominal × fiyat / 100.
+
+const EUROBOND_MAP = new Map(EUROBONDS.map((e) => [e.code, e]));
+
+export function eurobondInfo(isin: string): EurobondInfo | undefined {
+  return EUROBOND_MAP.get(isin);
+}
+
+const MONTHS_SHORT = ['Oca', 'Şub', 'Mar', 'Nis', 'May', 'Haz', 'Tem', 'Ağu', 'Eyl', 'Eki', 'Kas', 'Ara'];
+
+/** Eurobondun kısa adı: vade ayı, yılı ve döviz cinsi ("Oca 2028 USD"); listede yoksa ISIN. */
+export function eurobondLabel(isin: string): string {
+  const e = EUROBOND_MAP.get(isin);
+  if (!e) return isin;
+  const [y, m] = e.maturity.split('-').map(Number);
+  return `${MONTHS_SHORT[m - 1]} ${y} ${e.currency}`;
+}
+
+/**
+ * Fiyatın kaç birim için verildiği: eurobondlarda 100 nominal (çarpan 0,01), diğerlerinde 1 birim.
+ * Değer = miktar × fiyat × çarpan.
+ */
+export function priceFactor(kind: AssetKind): number {
+  return kind === 'eurobond' ? 0.01 : 1;
 }
 
 /** Fiyatı elle girilen türler (fon fiyatları otomatik alınamıyor). */
@@ -222,6 +261,8 @@ export function normalizeSymbol(kind: AssetKind, input: string): string {
  */
 export function quoteSymbolFor(kind: AssetKind, symbol: string): string | null {
   switch (kind) {
+    case 'eurobond':
+      return `EB:${symbol}`;
     case 'bist':
       return `${symbol}.IS`;
     case 'us':
@@ -250,6 +291,7 @@ export function fixedName(kind: AssetKind, symbol: string): string | undefined {
 
 export function displaySymbol(kind: AssetKind, symbol: string): string {
   if (kind === 'metal') return fixedName(kind, symbol) ?? symbol;
+  if (kind === 'eurobond') return eurobondLabel(symbol);
   return symbol;
 }
 

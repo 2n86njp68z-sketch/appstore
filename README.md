@@ -32,6 +32,7 @@ Expo (React Native) ile yazıldı. Geliştirmek ve App Store'a göndermek için 
     - Emtia: altın, gümüş, platin, paladyum ve Brent petrol; her biri dolar bazında ($/ons, Brent $/varil) ve TL bazında (₺/gram, Brent ₺/varil)
     - TEFAS: 2.106 yatırım fonu
     - BES: 288 emeklilik yatırım fonu
+    - Eurobond (Avrupa Birliği bayrağı): T.C. Hazine ve Maliye Bakanlığı'nın dolar ve euro cinsi 38 eurobondu; vade, döviz cinsi, fiyat (100 nominal başına) ve yıllık getiri
     - Kripto: piyasa değerine göre ilk 491 coin
     - Endeks: S&P 500, Nasdaq 100, BIST 100 (yalnız izlenir, portföye eklenmez)
     - Kurlar: Dolar (USD/TRY) ve Euro (EUR/TRY); dokununca portföye döviz olarak eklenir
@@ -55,6 +56,7 @@ Expo (React Native) ile yazıldı. Geliştirmek ve App Store'a göndermek için 
   - Döviz (USD, EUR, GBP, CHF)
   - Emtia: altın, gümüş, platin, paladyum, Brent petrol (dolar ve TL bazında)
   - TEFAS ve BES fonları (fiyat elle girilir)
+  - Eurobond: miktar nominal olarak girilir, fiyat 100 nominal başınadır; değer = nominal × fiyat / 100
   - "Diğer": fiyatını elle girdiğin mevduat vb.
 - **Alış/satış kaydı:** Ortalama maliyet ve gerçekleşen kâr/zarar hesaplanır
 - **Fiyatlar:** Otomatik çekilir. Aşağı çekince ve uygulama öne gelince yenilenir.
@@ -116,6 +118,7 @@ tests/                  Birim testleri
   - BIST 100 getiri endeksi: Borsa İstanbul (`borsaistanbul.com`). Uzun geçmiş dosyası (~500 KB) yalnız yeni kapanış açıklanınca iner, anlık değer saatte bir yenilenir. Site tarayıcıdan erişime izin vermediği için web sürümünde fiyat endeksi kullanılır.
   - Enflasyon (TÜİK TÜFE): TCMB enflasyon sayfası (`www.tcmb.gov.tr`, Ocak 2005'ten bu yana aylık değişimler). Alınamazsa OECD istatistik servisi (`sdmx.oecd.org`, Aralık 2025'e kadar). TCMB sitesi tarayıcıdan erişime izin vermediği için web sürümünde OECD kullanılır.
   - Kripto: CoinGecko, coin kimliğiyle; aynı kısaltmalı coinler karışmaz
+  - Eurobond: Ziraat Bankası'nın eurobond sayfasındaki günlük tablo (bankanın alış fiyatı ve getirisi; değer bu fiyatla hesaplanır)
   - Fonlar (TEFAS/BES): **elle girilir.** Günlük fon fiyatları yalnız TEFAS'ta var ve TEFAS sitesi otomatik erişime karşı korunuyor. Lisanslı bir veri kaynağı bağlanınca otomatik olabilir.
 - ABD'de bilinen şirketlerin hepsinin internet adresi var. Wikidata'da kaydı olmayan küçük şirketlerde (yaklaşık 3.700) harf rozeti görünür.
 - Logolar uygulama çalışırken şirketin kendi sitesinden alınır. Sıra şöyle:
@@ -137,6 +140,8 @@ python3 -I scripts/fetch-fund-sources.py /tmp/fon       # pdftotext gerekir (pop
 python3 -I scripts/build-fund-data.py /tmp/fon/funds.json > src/data/funds.ts
 python3 -I scripts/fetch-crypto-sources.py /tmp/kripto
 python3 -I scripts/build-crypto-data.py /tmp/kripto/crypto.json > src/data/crypto.ts
+curl -sL -o /tmp/ziraat-eurobond.html https://www.ziraatbank.com.tr/tr/bireysel/yatirim/eurobond
+python3 -I scripts/build-eurobond-data.py /tmp/ziraat-eurobond.html > src/data/eurobonds.ts
 ```
 
 Logo (GENIUS) çizgileri Unbounded Black yazı tipinden üretilir (fontTools gerekir):

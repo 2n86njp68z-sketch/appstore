@@ -6,6 +6,7 @@ import {
   FX_RATE_SYMBOL,
   fixedName,
   isManualPriced,
+  priceFactor,
   quoteSymbolFor,
   TROY_OUNCE_GRAMS,
   USDTRY_SYMBOL,
@@ -41,17 +42,23 @@ export interface Position {
   realizedPnl: number;
 }
 
-/** Ortalama maliyet yöntemiyle pozisyonu hesaplar. Eldekinden fazla satış eldeki miktarla sınırlanır. */
+/**
+ * Ortalama maliyet yöntemiyle pozisyonu hesaplar. Eldekinden fazla satış eldeki miktarla sınırlanır.
+ * Eurobondlarda fiyat 100 nominal başına olduğu için hesap "fiyat birimi" cinsinden (nominal × 0,01)
+ * yapılır; dönen miktar yine nominaldir, ortalama maliyet fiyatla aynı birimdedir.
+ */
 export function computePosition(transactions: Transaction[]): Position {
+  const f = transactions.length ? priceFactor(transactions[0].kind) : 1;
   let quantity = 0;
   let costBasis = 0;
   let realizedPnl = 0;
   for (const t of sortTransactions(transactions)) {
+    const tq = t.quantity * f;
     if (t.side === 'buy') {
-      quantity += t.quantity;
-      costBasis += t.quantity * t.price;
+      quantity += tq;
+      costBasis += tq * t.price;
     } else {
-      const sellQty = Math.min(t.quantity, quantity);
+      const sellQty = Math.min(tq, quantity);
       if (sellQty <= 0) continue;
       const avg = costBasis / quantity;
       realizedPnl += sellQty * (t.price - avg);
@@ -63,7 +70,7 @@ export function computePosition(transactions: Transaction[]): Position {
       }
     }
   }
-  return { quantity, avgCost: quantity > 0 ? costBasis / quantity : 0, costBasis, realizedPnl };
+  return { quantity: quantity / f, avgCost: quantity > 0 ? costBasis / quantity : 0, costBasis, realizedPnl };
 }
 
 /** Gereken ham sembollerin listesi (USD/TRY ve EUR/TRY kurları her zaman eklenir). */
@@ -107,7 +114,7 @@ export function resolveAssetQuote(
   const s = quoteSymbolFor(kind, symbol);
   const q = s ? raw[s] : undefined;
   if (!q) return undefined;
-  return { price: q.price, previousClose: q.previousClose, name: q.name, fetchedAt: q.fetchedAt };
+  return { price: q.price, previousClose: q.previousClose, name: q.name, fetchedAt: q.fetchedAt, yieldPct: q.yieldPct };
 }
 
 // ---------------------------------------------------------------------------
@@ -175,21 +182,23 @@ interface CurrencyLedger {
 
 /** Ortalama maliyetle, her para biriminde ayrı maliyet ve gerçekleşen K/Z (işlem tarihindeki kurla). */
 function ledgerIn(sorted: Transaction[], native: Currency, target: DisplayCurrency, fx: FxRates): CurrencyLedger {
+  const f = sorted.length ? priceFactor(sorted[0].kind) : 1;
   let quantity = 0;
   let cost = 0;
   let realized = 0;
   let ok = true;
   for (const t of sorted) {
+    const tq = t.quantity * f;
     const unit = native === target ? t.price : convert(t.price, fx.on(native, t.date), fx.on(target, t.date));
     if (unit == null) {
       ok = false;
       continue;
     }
     if (t.side === 'buy') {
-      quantity += t.quantity;
-      cost += t.quantity * unit;
+      quantity += tq;
+      cost += tq * unit;
     } else {
-      const sellQty = Math.min(t.quantity, quantity);
+      const sellQty = Math.min(tq, quantity);
       if (sellQty <= 0) continue;
       const removed = cost * (sellQty / quantity);
       realized += sellQty * unit - removed;
@@ -229,7 +238,9 @@ export function computeHoldings(
     const quote = resolveAssetQuote(kind, symbol, raw, manualPrices);
     const priceMissing = !quote;
     const price = quote?.price ?? pos.avgCost;
-    const marketValue = pos.quantity * price;
+    // Eurobondlarda fiyat 100 nominal başına: değer = nominal × fiyat × 0,01
+    const units = pos.quantity * priceFactor(kind);
+    const marketValue = units * price;
     const unrealizedPnl = marketValue - pos.costBasis;
     const unrealizedPct = pos.costBasis > 0 ? (unrealizedPnl / pos.costBasis) * 100 : 0;
     const prev = quote?.previousClose != null && quote.previousClose > 0 ? quote.previousClose : undefined;
@@ -237,7 +248,7 @@ export function computeHoldings(
     let dayChange: number | undefined;
     let dayChangePct: number | undefined;
     if (quote && prev != null) {
-      dayChange = pos.quantity * (quote.price - prev);
+      dayChange = units * (quote.price - prev);
       dayChangePct = ((quote.price - prev) / prev) * 100;
     }
 
@@ -251,7 +262,7 @@ export function computeHoldings(
       const value = priceMissing ? ledger.cost : convert(marketValue, nowRate, curNow)!;
       let viewDayChange: number | undefined;
       if (!priceMissing && prev != null) {
-        const prevValue = convert(pos.quantity * prev, fx.previous(native), fx.previous(cur));
+        const prevValue = convert(units * prev, fx.previous(native), fx.previous(cur));
         if (prevValue != null) viewDayChange = value - prevValue;
       }
       const pnl = value - ledger.cost;

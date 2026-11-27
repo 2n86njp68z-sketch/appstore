@@ -342,12 +342,65 @@ export async function fetchAnyQuotes(
   fallbackLimit = 30,
 ): Promise<Record<string, RawQuote>> {
   const cg = keys.filter((k) => k.startsWith('CG:')).map((k) => k.slice(3));
-  const yahoo = keys.filter((k) => !k.startsWith('CG:'));
-  const [a, b] = await Promise.all([
+  const eb = keys.filter((k) => k.startsWith('EB:'));
+  const yahoo = keys.filter((k) => !k.startsWith('CG:') && !k.startsWith('EB:'));
+  const [a, b, e] = await Promise.all([
     cg.length ? fetchCoinGecko(cg, fetchFn) : Promise.resolve({}),
     yahoo.length ? fetchQuotesBatched(yahoo, fetchFn, fallbackLimit) : Promise.resolve({}),
+    eb.length ? fetchEurobondQuotes(eb, fetchFn).catch(() => ({})) : Promise.resolve({}),
   ]);
-  return { ...a, ...b };
+  return { ...a, ...b, ...e };
+}
+
+// ---------------------------------------------------------------------------
+// Eurobond: T.C. Hazine eurobondlarının günlük fiyatları, Ziraat Bankası'nın eurobond sayfasındaki
+// tablodan (ISIN, vade, döviz, alış/satış fiyatı ve getirisi). Değer için bankanın alış fiyatı
+// (elindekini satsan alacağın fiyat) kullanılır. Anahtar: "EB:<ISIN>".
+
+const ZIRAAT_EUROBOND = 'https://www.ziraatbank.com.tr/tr/bireysel/yatirim/eurobond';
+
+/** Ziraat eurobond tablosundan fiyatlar: alış fiyatı (100 nominal başına) ve alış getirisi. */
+export function parseZiraatEurobonds(html: string, now: number = Date.now()): Record<string, RawQuote> {
+  const out: Record<string, RawQuote> = {};
+  const num = (v: string | undefined) => Number((v ?? '').replace(/\./g, '').replace(',', '.'));
+  const cell = (c: string) =>
+    c
+      .replace(/<[^>]+>/g, '')
+      .replace(/&nbsp;/g, ' ')
+      .trim();
+  for (const row of html.match(/<tr[\s\S]*?<\/tr>/gi) ?? []) {
+    const cells = (row.match(/<t[dh][\s\S]*?<\/t[dh]>/gi) ?? []).map(cell);
+    if (cells.length < 6 || !/^[A-Z]{2}[A-Z0-9]{9}[0-9]$/.test(cells[0])) continue;
+    const price = num(cells[4]);
+    const yieldPct = num(cells[5]);
+    if (!(price > 0)) continue;
+    out[`EB:${cells[0]}`] = { price, fetchedAt: now, ...(Number.isFinite(yieldPct) ? { yieldPct } : {}) };
+  }
+  return out;
+}
+
+let eurobondCache: { at: number; data: Promise<Record<string, RawQuote>> } | null = null;
+
+/** Eurobond fiyatları ("EB:<ISIN>" anahtarlarıyla); sayfa 10 dakika bellekte tutulur. */
+export async function fetchEurobondQuotes(
+  keys: string[],
+  fetchFn: FetchLike = fetch as unknown as FetchLike,
+): Promise<Record<string, RawQuote>> {
+  if (WEB_DATA_BASE) return webQuotes(keys, fetchFn);
+  if (!eurobondCache || Date.now() - eurobondCache.at > WEB_TTL_MS) {
+    const data = fetchWithTimeout(fetchFn, ZIRAAT_EUROBOND, 20_000, 'text/html').then(async (res) => {
+      if (!res.ok || !res.text) throw new Error(`HTTP ${res.status}`);
+      const quotes = parseZiraatEurobonds(await res.text());
+      if (Object.keys(quotes).length === 0) throw new Error('Eurobond tablosu okunamadı');
+      return quotes;
+    });
+    eurobondCache = { at: Date.now(), data };
+    data.catch(() => {
+      eurobondCache = null;
+    });
+  }
+  const all = await eurobondCache.data;
+  return Object.fromEntries(keys.filter((k) => all[k]).map((k) => [k, all[k]]));
 }
 
 // ---------------------------------------------------------------------------

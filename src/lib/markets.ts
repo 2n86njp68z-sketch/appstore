@@ -1,6 +1,7 @@
 import { BIST_STOCKS } from '../data/bist';
 import { CRYPTO_COINS } from '../data/crypto';
 import { US_ETFS } from '../data/etf';
+import { EUROBONDS } from '../data/eurobonds';
 import { BES_FUNDS, TEFAS_FUNDS } from '../data/funds';
 import { US_STOCKS } from '../data/us';
 import { COMMODITIES, quoteSymbolFor, USDTRY_SYMBOL, assetCurrency, commodityInfo } from './assets';
@@ -20,7 +21,7 @@ export interface MarketStock {
   exchange?: string;
 }
 
-export type MarketKey = 'bist' | 'us' | 'etf' | 'metal' | 'fund' | 'bes' | 'crypto';
+export type MarketKey = 'bist' | 'us' | 'etf' | 'metal' | 'fund' | 'bes' | 'crypto' | 'eurobond';
 
 export interface MarketDef {
   key: MarketKey;
@@ -36,6 +37,13 @@ export interface MarketDef {
 }
 
 const COMMODITY_STOCKS: readonly MarketStock[] = COMMODITIES.map((c) => ({ code: c.symbol, name: c.name }));
+
+/** Hazine eurobondları: ad vade ve döviz cinsinden ("Vade 15.01.2028 · USD"); aramada yıl da bulunur. */
+const EUROBOND_STOCKS: readonly MarketStock[] = EUROBONDS.map((e) => ({
+  code: e.code,
+  name: `Vade ${e.maturity.split('-').reverse().join('.')} · ${e.currency}`,
+  company: 'Hazine eurobond',
+}));
 
 function quoteKeysFor(kind: AssetKind) {
   return (code: string): string[] => {
@@ -67,6 +75,7 @@ export const MARKETS: Record<MarketKey, MarketDef> = {
   fund: market('fund', 'fund', 'TEFAS', TEFAS_FUNDS, true),
   bes: market('bes', 'bes', 'BES', BES_FUNDS, true),
   crypto: market('crypto', 'crypto', 'Kripto', CRYPTO_COINS),
+  eurobond: market('eurobond', 'eurobond', 'Eurobond', EUROBOND_STOCKS),
 };
 
 const KIND_TO_MARKET: Partial<Record<AssetKind, MarketKey>> = {
@@ -77,6 +86,7 @@ const KIND_TO_MARKET: Partial<Record<AssetKind, MarketKey>> = {
   fund: 'fund',
   bes: 'bes',
   crypto: 'crypto',
+  eurobond: 'eurobond',
 };
 
 const byCode = new Map<MarketKey, Map<string, MarketStock>>();

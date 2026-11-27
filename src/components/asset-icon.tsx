@@ -3,7 +3,7 @@ import { Platform, Text, View } from 'react-native';
 
 import { CompanyLogo } from '@/components/company-logo';
 import { Font, useColors } from '@/constants/theme';
-import { commodityInfo, type CommodityLook } from '@/lib/assets';
+import { assetCurrency, commodityInfo, type CommodityLook } from '@/lib/assets';
 import { stockInfo } from '@/lib/markets';
 import Svg, {
   Circle,
@@ -353,6 +353,9 @@ export function CategoryIcon({ kind, size }: { kind: AssetKind; size: number }) 
     case 'fund':
     case 'bes':
       return <FlagIcon code="TR" size={size} />;
+    // Eurobond bölümü Avrupa Birliği bayrağıyla
+    case 'eurobond':
+      return <FlagIcon code="EUR" size={size} />;
     case 'other':
       return (
         <Round size={size}>
@@ -387,7 +390,9 @@ export function AssetIcon({
   const logoUrl = info?.logo;
   const logo = website != null || logoUrl != null;
   const commodity = kind === 'metal' ? commodityInfo(symbol) : undefined;
-  const pictured = logo || commodity != null || (kind === 'fx' && FLAGS[symbol] != null);
+  // Eurobond: Türk bayrağı ve sağ altta döviz cinsinin bayrağı (USD/EUR)
+  const bond = kind === 'eurobond';
+  const pictured = logo || commodity != null || bond || (kind === 'fx' && FLAGS[symbol] != null);
   if (pictured) {
     const inner = ring ? size - 7 : size;
     const icon = logo ? (
@@ -396,6 +401,8 @@ export function AssetIcon({
       <Round size={inner}>
         <CommodityArt look={commodity.look} />
       </Round>
+    ) : bond ? (
+      <PairIcon main="TR" second={assetCurrency(kind, symbol)} size={inner} />
     ) : (
       <PairIcon main={symbol} second="TR" size={inner} />
     );

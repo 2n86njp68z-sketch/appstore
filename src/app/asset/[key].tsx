@@ -6,12 +6,12 @@ import { AssetIcon } from '@/components/asset-icon';
 import { Card, PrimaryButton, SectionTitle, StatRow } from '@/components/ui';
 import { Font, pnlColor, useColors } from '@/constants/theme';
 import { usePortfolio } from '@/context/portfolio-context';
-import { displaySymbol, isManualPriced, kindInfo, quantityUnit } from '@/lib/assets';
+import { displaySymbol, isManualPriced, kindInfo, priceFactor, quantityUnit } from '@/lib/assets';
 import {
   currencySymbol,
   formatMoney,
   formatPct,
-  formatPrice,
+  formatAssetPrice,
   formatQuantity,
   formatTrDate,
   parseDecimal,
@@ -20,7 +20,7 @@ import {
   trUpper,
 } from '@/lib/format';
 import { DISPLAY_CURRENCIES } from '@/lib/portfolio';
-import type { DisplayCurrency, Holding, Transaction } from '@/lib/types';
+import type { AssetKind, Currency, DisplayCurrency, Holding, Transaction } from '@/lib/types';
 
 function confirm(title: string, message: string, onConfirm: () => void) {
   if (Platform.OS === 'web') {
@@ -87,7 +87,7 @@ export default function AssetScreen() {
             </View>
           </View>
           <Text style={[styles.price, { color: c.text }]}>
-            {h.priceMissing ? 'Fiyat yok' : formatPrice(h.price, h.currency)}
+            {h.priceMissing ? 'Fiyat yok' : formatAssetPrice(h.kind, h.price, h.currency)}
           </Text>
           {h.dayChangePct != null && (
             <Text style={[styles.change, { color: pnlColor(c, h.dayChangePct) }]}>
@@ -131,7 +131,11 @@ export default function AssetScreen() {
             <>
               <StatRow
                 label="Ortalama maliyet"
-                value={formatMoney(h.avgCost, h.currency, { decimals: priceDecimals(h.avgCost) })}
+                value={
+                  h.kind === 'eurobond'
+                    ? formatAssetPrice(h.kind, h.avgCost, h.currency)
+                    : formatMoney(h.avgCost, h.currency, { decimals: priceDecimals(h.avgCost) })
+                }
               />
               <StatRow label="Toplam maliyet" value={formatMoney(h.costBasis, h.currency)} />
               <StatRow label="Güncel değer" value={formatMoney(h.marketValue, h.currency)} />
@@ -174,6 +178,7 @@ export default function AssetScreen() {
               key={t.id}
               tx={t}
               currency={h.currency}
+              kind={h.kind}
               last={i === arr.length - 1}
               onDelete={() =>
                 confirm('İşlemi sil', `${formatTrDate(t.date)} tarihli işlem silinsin mi?`, () =>
@@ -236,11 +241,13 @@ function CurrencyBreakdown({ holding: h }: { holding: Holding }) {
 function TransactionRow({
   tx,
   currency,
+  kind,
   last,
   onDelete,
 }: {
   tx: Transaction;
-  currency: 'TRY' | 'USD';
+  currency: Currency;
+  kind: AssetKind;
   last: boolean;
   onDelete: () => void;
 }) {
@@ -253,11 +260,13 @@ function TransactionRow({
       </View>
       <View style={{ flex: 1 }}>
         <Text style={[styles.txMain, { color: c.text }]}>
-          {formatQuantity(tx.quantity)} × {formatPrice(tx.price, currency)}
+          {formatQuantity(tx.quantity)} × {formatAssetPrice(kind, tx.price, currency)}
         </Text>
         <Text style={[styles.txSub, { color: c.textSecondary }]}>{formatTrDate(tx.date)}</Text>
       </View>
-      <Text style={[styles.txTotal, { color: c.text }]}>{formatMoney(tx.quantity * tx.price, currency)}</Text>
+      <Text style={[styles.txTotal, { color: c.text }]}>
+        {formatMoney(tx.quantity * tx.price * priceFactor(kind), currency)}
+      </Text>
       <Pressable onPress={onDelete} hitSlop={10} accessibilityRole="button" accessibilityLabel="İşlemi sil">
         <Text style={[styles.delete, { color: c.negative }]}>Sil</Text>
       </Pressable>

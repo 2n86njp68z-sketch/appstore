@@ -1,4 +1,4 @@
-import { assetCurrency } from './assets';
+import { assetCurrency, priceFactor } from './assets';
 import { FxRates, rateOn, sortTransactions } from './portfolio';
 import type { FxHistory, FxSeries, RawQuote, Transaction } from './types';
 
@@ -44,7 +44,7 @@ export interface BenchmarkResult {
 /** İşlemin o günkü TL tutarı (dolarlı varlıklar işlem günündeki kurla). */
 export function txAmountTry(t: Transaction, fx: FxRates): number | undefined {
   const rate = fx.on(assetCurrency(t.kind, t.symbol), t.date);
-  return rate == null ? undefined : t.quantity * t.price * rate;
+  return rate == null ? undefined : t.quantity * t.price * priceFactor(t.kind) * rate;
 }
 
 /**

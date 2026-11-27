@@ -3,7 +3,7 @@
  * (.github/workflows/pages.yml); tarayıcı Yahoo, Borsa İstanbul ve TCMB'ye doğrudan erişemediği için
  * web sürümü fiyatları bu dosyalardan okur.
  *
- *   data/quotes.json        Tüm listelerin (BIST, ABD, ETF, emtia, endeks, kur) son fiyatları
+ *   data/quotes.json        Tüm listelerin (BIST, ABD, ETF, emtia, eurobond, endeks, kur) son fiyatları
  *   data/history/*.json     Kur ve endeks geçmişleri (USD/TRY, EUR/TRY, BIST 100, S&P 500 TR)
  *   data/bench.json         BIST 100 getiri endeksi ve TÜFE endeksi
  *   data/meta.json          Üretim zamanı ve özet
@@ -21,6 +21,7 @@ import { OVERVIEW } from '../src/lib/overview';
 import {
   BIST100_TR_CODE,
   fetchBistIndex,
+  fetchEurobondQuotes,
   fetchHistory,
   fetchQuotesBatched,
   fetchTurkeyCpi,
@@ -33,7 +34,7 @@ import type { FxSeries, RawQuote } from '../src/lib/types';
 const outDir = process.argv[2] ?? 'dist/data';
 const previousUrl = process.argv[3];
 
-const PRICED_MARKETS: MarketKey[] = ['bist', 'us', 'etf', 'metal'];
+const PRICED_MARKETS: MarketKey[] = ['bist', 'us', 'etf', 'metal', 'eurobond'];
 const HISTORY_SYMBOLS = [USDTRY_SYMBOL, EURTRY_SYMBOL, ...Object.values(BENCH_SYMBOLS)];
 /** Aynı anda Yahoo'ya giden toplu istek sayısı. */
 const PARALLEL = 4;
@@ -49,9 +50,18 @@ function allSymbols(): string[] {
 }
 
 async function fetchAll(symbols: string[]): Promise<Record<string, RawQuote>> {
-  const size = Math.ceil(symbols.length / PARALLEL);
-  const parts = Array.from({ length: PARALLEL }, (_, i) => symbols.slice(i * size, (i + 1) * size));
-  const results = await Promise.all(parts.map((p) => fetchQuotesBatched(p, undefined, 0)));
+  // Eurobondlar Ziraat Bankası'nın sayfasından, diğerleri Yahoo'dan
+  const eb = symbols.filter((s) => s.startsWith('EB:'));
+  const yahoo = symbols.filter((s) => !s.startsWith('EB:'));
+  const size = Math.ceil(yahoo.length / PARALLEL);
+  const parts = Array.from({ length: PARALLEL }, (_, i) => yahoo.slice(i * size, (i + 1) * size));
+  const results = await Promise.all([
+    ...parts.map((p) => fetchQuotesBatched(p, undefined, 0)),
+    fetchEurobondQuotes(eb).catch((e) => {
+      console.warn('Eurobond fiyatları alınamadı', e);
+      return {};
+    }),
+  ]);
   return Object.assign({}, ...results);
 }
 
@@ -81,8 +91,10 @@ async function main() {
   let kept = 0;
   for (const s of symbols) {
     // Adlar uygulamanın kendi listelerinde var; dosya küçük kalsın diye yalnız fiyatlar yazılır.
-    if (fresh[s]) quotes[s] = { price: fresh[s].price, previousClose: fresh[s].previousClose, fetchedAt: started };
-    else if (previous[s]) {
+    if (fresh[s]) {
+      const { price, previousClose, yieldPct } = fresh[s];
+      quotes[s] = { price, previousClose, fetchedAt: started, ...(yieldPct != null ? { yieldPct } : {}) };
+    } else if (previous[s]) {
       quotes[s] = previous[s];
       kept++;
     }

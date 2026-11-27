@@ -22,7 +22,15 @@ import { pnlColor, pnlSoft, Radius, Type, useColors } from '@/constants/theme';
 import { usePortfolio } from '@/context/portfolio-context';
 import { displaySymbol, kindInfo, quantityUnit } from '@/lib/assets';
 import { buildChartData, type ChartAsset, type ChartCategory, type DonutHit } from '@/lib/donut';
-import { currencySymbol, formatMoney, formatPct, formatPrice, formatQuantity, formatTime, trUpper } from '@/lib/format';
+import {
+  currencySymbol,
+  formatAssetPrice,
+  formatMoney,
+  formatPct,
+  formatQuantity,
+  formatTime,
+  trUpper,
+} from '@/lib/format';
 import { DISPLAY_CURRENCIES } from '@/lib/portfolio';
 import type { AssetKind, DisplayCurrency, Holding } from '@/lib/types';
 
@@ -420,7 +428,7 @@ function AssetRow({
       icon={<AssetIcon kind={h.kind} symbol={h.symbol} label={a.label} color={a.color} size={ICON_SIZE} ring />}
       title={a.label}
       subtitle={`${formatQuantity(h.quantity)} ${quantityUnit(h.kind, h.symbol)} · ${
-        h.priceMissing ? 'fiyat yok' : formatPrice(h.price, h.currency)
+        h.priceMissing ? 'fiyat yok' : formatAssetPrice(h.kind, h.price, h.currency)
       }`}
       pct={formatPct(a.pct, { signed: false, decimals: 1 })}
       value={v ? formatMoney(v.value, currency, { decimals: 0 }) : '—'}

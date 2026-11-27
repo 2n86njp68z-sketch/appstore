@@ -1,8 +1,8 @@
 /** Varlık türleri. */
-export type AssetKind = 'bist' | 'us' | 'etf' | 'crypto' | 'fx' | 'metal' | 'fund' | 'bes' | 'other';
+export type AssetKind = 'bist' | 'us' | 'etf' | 'crypto' | 'fx' | 'metal' | 'fund' | 'bes' | 'eurobond' | 'other';
 
 /** Fiyatların tutulduğu para birimi. */
-export type Currency = 'TRY' | 'USD';
+export type Currency = 'TRY' | 'USD' | 'EUR';
 
 /** Portföyün gösterilebildiği para birimleri. */
 export type DisplayCurrency = 'TRY' | 'USD' | 'EUR';
@@ -43,10 +43,14 @@ export interface RawQuote {
   previousClose?: number;
   name?: string;
   fetchedAt: number;
+  /** Eurobondlarda yıllık getiri (%). */
+  yieldPct?: number;
 }
 
 /** Bir varlığa ait çözülmüş fiyat. */
 export interface AssetQuote {
+  /** Eurobondlarda yıllık getiri (%). */
+  yieldPct?: number;
   price: number;
   previousClose?: number;
   name?: string;

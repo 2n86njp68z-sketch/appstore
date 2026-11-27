@@ -40,7 +40,7 @@ import { TrendIcon } from '@/components/trend-icon';
 import { pnlColor, pnlSoft, Radius, Type, useColors } from '@/constants/theme';
 import { usePortfolio } from '@/context/portfolio-context';
 import { paletteFor } from '@/lib/donut';
-import { formatNumber, formatPct, formatPrice, trUpper } from '@/lib/format';
+import { formatAssetPrice, formatNumber, formatPct, formatPrice, trUpper } from '@/lib/format';
 import { MARKETS, searchStocks, type MarketKey, type MarketStock } from '@/lib/markets';
 import { commodityInfo, displaySymbol } from '@/lib/assets';
 import { fetchGrafikCatalog, portfolioCompareLink } from '@/lib/grafik';
@@ -247,6 +247,15 @@ const SECTION_DEFS: SectionDef[] = [
     group: 'Türkiye',
     accent: '#2B8A3E',
     subtitle: 'Emeklilik fonları',
+  },
+  {
+    key: 'eurobond',
+    title: 'Eurobond',
+    kind: 'eurobond',
+    market: 'eurobond',
+    group: 'Türkiye',
+    accent: '#1D4ED8',
+    subtitle: 'T.C. Hazine tahvilleri',
   },
   {
     key: 'us',
@@ -1124,7 +1133,7 @@ const StockRow = memo(function StockRow({
       />
       <View style={styles.stockMain}>
         <Text style={[Type.headline, { color: c.text, fontSize: 15 }]} numberOfLines={1}>
-          {market === 'metal' ? displaySymbol('metal', stock.code) : stock.code}
+          {market === 'metal' || market === 'eurobond' ? displaySymbol(MARKETS[market].kind, stock.code) : stock.code}
         </Text>
         <Text style={[Type.subhead, { color: c.textSecondary, fontSize: 12 }]} numberOfLines={1}>
           {subtitle}
@@ -1134,19 +1143,28 @@ const StockRow = memo(function StockRow({
       {(!manual || quote) && (
         <View style={styles.priceCol}>
           <Text style={[Type.number, styles.price, { color: quote ? c.text : c.textTertiary }]} numberOfLines={1}>
-            {quote ? formatPrice(quote.price, MARKETS[market].currencyOf(stock.code)) : '—'}
+            {quote ? formatAssetPrice(MARKETS[market].kind, quote.price, MARKETS[market].currencyOf(stock.code)) : '—'}
           </Text>
-          {!manual && (
-            <View style={[styles.change, { backgroundColor: change != null ? pnlSoft(c, change) : c.chip }]}>
-              <Text
-                style={[
-                  Type.caption,
-                  styles.changeText,
-                  { color: change != null ? pnlColor(c, change) : c.textTertiary },
-                ]}>
-                {change != null ? formatPct(change) : '—'}
+          {/* Eurobondlarda günlük değişim yerine yıllık getiri */}
+          {market === 'eurobond' && quote?.yieldPct != null ? (
+            <View style={[styles.change, { backgroundColor: c.chip }]}>
+              <Text style={[Type.caption, styles.changeText, { color: c.textSecondary }]}>
+                getiri %{formatNumber(quote.yieldPct, 2, 2)}
               </Text>
             </View>
+          ) : (
+            !manual && (
+              <View style={[styles.change, { backgroundColor: change != null ? pnlSoft(c, change) : c.chip }]}>
+                <Text
+                  style={[
+                    Type.caption,
+                    styles.changeText,
+                    { color: change != null ? pnlColor(c, change) : c.textTertiary },
+                  ]}>
+                  {change != null ? formatPct(change) : '—'}
+                </Text>
+              </View>
+            )
           )}
         </View>
       )}

@@ -1,4 +1,4 @@
-import type { DisplayCurrency } from './types';
+import type { AssetKind, DisplayCurrency } from './types';
 
 /** Türkçe sayı biçimi: binlik ayırıcı ".", ondalık ",". */
 export function formatNumber(value: number, minFraction = 0, maxFraction = 2): string {
@@ -45,6 +45,12 @@ export function formatPrice(value: number, currency: DisplayCurrency): string {
 }
 
 /** Yüzde: "+%12,34" */
+/** Varlık fiyatı: eurobondlarda 100 nominal başına, para birimi işareti olmadan (ör. 98,503). */
+export function formatAssetPrice(kind: AssetKind, value: number, currency: DisplayCurrency): string {
+  if (kind === 'eurobond') return formatNumber(value, 2, 3);
+  return formatPrice(value, currency);
+}
+
 export function formatPct(value: number, opts: { signed?: boolean; decimals?: number } = { signed: true }): string {
   if (!Number.isFinite(value)) return '—';
   const d = opts.decimals ?? 2;
