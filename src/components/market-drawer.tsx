@@ -32,6 +32,7 @@ import Svg, { Circle, Line, Path } from 'react-native-svg';
 
 import { AssetIcon, CategoryIcon, CompareMark, FlagIcon, IndexMark, PairIcon } from '@/components/asset-icon';
 import { CompanyLogo } from '@/components/company-logo';
+import { GeniusLogo } from '@/components/genius-logo';
 import { TrendIcon } from '@/components/trend-icon';
 import { pnlColor, pnlSoft, Radius, Type, useColors } from '@/constants/theme';
 import { usePortfolio } from '@/context/portfolio-context';
@@ -486,7 +487,9 @@ function MarketDrawer({ open, onClose }: { open: boolean; onClose: () => void })
           },
         ]}>
         <View style={styles.headerRow}>
-          <Text style={[Type.title, { color: c.text, fontSize: 24 }]}>Piyasalar</Text>
+          <View style={styles.drawerLogo}>
+            <GeniusLogo height={30} />
+          </View>
           <Pressable onPress={onClose} hitSlop={10} accessibilityRole="button" accessibilityLabel="Kapat">
             <Svg width={22} height={22} viewBox="0 0 24 24">
               <Line x1={6} y1={6} x2={18} y2={18} stroke={c.textSecondary} strokeWidth={2.2} strokeLinecap="round" />
@@ -861,6 +864,10 @@ const StockRow = memo(function StockRow({
 });
 
 const styles = StyleSheet.create({
+  drawerLogo: {
+    // Logonun kendi iç boşluğu sola hizayı bozmasın
+    marginLeft: -4,
+  },
   menuButton: {
     width: 34,
     height: 34,
