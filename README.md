@@ -77,7 +77,12 @@ Expo (React Native) ile yazıldı. Geliştirmek ve App Store'a göndermek için 
   - TEFAS ve BES fonları (fiyat TEFAS'tan otomatik; TEFAS'ta işlem görmeyen fonun fiyatı elle girilebilir)
   - Eurobond: miktar nominal olarak girilir, fiyat 100 nominal başınadır; değer = nominal × fiyat / 100
   - "Diğer": fiyatını elle girdiğin mevduat vb.
-- **Alış/satış kaydı:** Ortalama maliyet ve gerçekleşen kâr/zarar hesaplanır
+- **Alış/satış kaydı:** Ortalama maliyet ve gerçekleşen kâr/zarar hesaplanır.
+  - İşlem ekranı: üstte varlığın renginde kart (güncel fiyat, günlük değişim, elindeki miktar ve ortalama maliyet), büyük Alış/Satış düğmesi, büyük miktar alanı.
+  - Miktar ya da tutarla giriş: "Tutar"a geçince yazdığın TL/dolar tutarına kaç adet düştüğü hesaplanır (hisse ve eurobond tam adede yuvarlanır). Satışta "%25 · %50 · Tümü" kısayolları.
+  - Fiyat kendiliğinden gelir; "Güncel ↻" ile yenilenir. Tarihte "Bugün / Dün" kısayolları.
+  - Altta özet: ödenecek/alınacak tutar, alışta işlem sonrası miktar ve yeni ortalama maliyet, satışta gerçekleşecek kâr/zarar ve kalan miktar.
+  - "+" ile açılınca önce varlık türü (bayrak/simgeli), sonra arama: kod ya da ad yazdıkça öneriler logolarıyla çıkar; emtia ve dövizde seçenek kartları.
 - **Bedelsiz ve temettü:** Elde tutulan hisselerin bedelsiz sermaye artırımları/bölünmeleri ve nakit temettüleri kendiliğinden işlenir (günde bir yenilenir).
   - Bedelsiz/bölünme: hak kullanım gününden önce alınan paylar çoğalır, pay başı maliyet aynı oranda düşer; toplam maliyet değişmez. İşlem listesinde girdiğin adetler görünür.
   - Temettü: hak kullanım gününden önce eldeki pay × pay başına net temettü; kâr/zarara eklenir, varlık detayında "Temettü ve bedelsiz" listesinde görünür.
