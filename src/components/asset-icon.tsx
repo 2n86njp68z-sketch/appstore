@@ -266,8 +266,20 @@ export function FlagIcon({ code, size }: { code: string; size: number }) {
   return <Round size={size}>{Flag ? <Flag /> : <Glyph bg="#64748B" text={code.slice(0, 1)} />}</Round>;
 }
 
+/** Endeks bölümü simgesi: mavi daire üstünde yükselen çubuklar. */
+export function IndexMark({ size }: { size: number }) {
+  return (
+    <Round size={size} label="Endeks">
+      <Rect x={0} y={0} width={100} height={100} fill="#2F6BFF" />
+      <Rect x={24} y={56} width={13} height={22} rx={3} fill="#FFFFFF" />
+      <Rect x={44} y={42} width={13} height={36} rx={3} fill="#FFFFFF" />
+      <Rect x={64} y={26} width={13} height={52} rx={3} fill="#FFFFFF" />
+    </Round>
+  );
+}
+
 /** TradingView'deki döviz çiftleri gibi: büyük bayrak ve sağ altta küçük ikinci bayrak. */
-function PairIcon({ main, second, size }: { main: string; second: string; size: number }) {
+export function PairIcon({ main, second, size }: { main: string; second: string; size: number }) {
   const c = useColors();
   const small = Math.round(size * 0.5);
   return (

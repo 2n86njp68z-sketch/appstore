@@ -29,14 +29,15 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle, Line, Path } from 'react-native-svg';
 
-import { AssetIcon, CategoryIcon } from '@/components/asset-icon';
+import { AssetIcon, CategoryIcon, FlagIcon, IndexMark, PairIcon } from '@/components/asset-icon';
 import { TrendIcon } from '@/components/trend-icon';
 import { pnlColor, pnlSoft, Radius, Type, useColors } from '@/constants/theme';
 import { usePortfolio } from '@/context/portfolio-context';
 import { paletteFor } from '@/lib/donut';
-import { formatPct, formatPrice } from '@/lib/format';
+import { formatNumber, formatPct, formatPrice } from '@/lib/format';
 import { MARKETS, searchStocks, type MarketKey, type MarketStock } from '@/lib/markets';
 import { commodityInfo, displaySymbol } from '@/lib/assets';
+import { OVERVIEW, searchOverview, type OverviewItem, type OverviewKey } from '@/lib/overview';
 import { resolveAssetQuote } from '@/lib/portfolio';
 import { fetchAnyQuotes } from '@/lib/prices';
 import type { AssetKind, AssetQuote, RawQuote } from '@/lib/types';
@@ -145,6 +146,14 @@ interface StockItem {
   stock: MarketStock;
 }
 
+/** Endeks ve kur satırı. */
+interface OverviewRowItem {
+  key: string;
+  overview: OverviewItem;
+}
+
+type ListItem = StockItem | OverviewRowItem;
+
 interface MarketSection {
   key: string;
   title: string;
@@ -153,11 +162,15 @@ interface MarketSection {
   market?: MarketKey;
   /** Başlıkta görünen hisse sayısı. */
   total?: number;
-  data: StockItem[];
+  data: ListItem[];
 }
 
-const SECTION_DEFS: { key: string; title: string; kind: AssetKind; market?: MarketKey }[] = [
-  // Türk bayraklılar, ABD bayraklılar alt alta; ardından emtia ve kripto.
+type SectionDef =
+  | { key: string; title: string; kind: AssetKind; market: MarketKey; overview?: undefined }
+  | { key: OverviewKey; title: string; overview: OverviewKey; kind?: undefined; market?: undefined };
+
+const SECTION_DEFS: SectionDef[] = [
+  // Türk bayraklılar, ABD bayraklılar alt alta; ardından emtia, kripto, endeksler ve kurlar.
   { key: 'bist', title: 'Türk Market', kind: 'bist', market: 'bist' },
   { key: 'fund', title: 'TEFAS', kind: 'fund', market: 'fund' },
   { key: 'bes', title: 'BES', kind: 'bes', market: 'bes' },
@@ -165,9 +178,22 @@ const SECTION_DEFS: { key: string; title: string; kind: AssetKind; market?: Mark
   { key: 'etf', title: 'ABD ETF', kind: 'etf', market: 'etf' },
   { key: 'metal', title: 'Emtia', kind: 'metal', market: 'metal' },
   { key: 'crypto', title: 'Kripto', kind: 'crypto', market: 'crypto' },
+  { key: 'index', title: OVERVIEW.index.title, overview: 'index' },
+  { key: 'rates', title: OVERVIEW.rates.title, overview: 'rates' },
 ];
 
-const MARKET_KEYS = SECTION_DEFS.map((d) => d.market).filter(Boolean) as MarketKey[];
+const MARKET_KEYS = SECTION_DEFS.flatMap((d) => (d.market ? [d.market] : []));
+
+const OVERVIEW_ROWS = Object.fromEntries(
+  (Object.keys(OVERVIEW) as OverviewKey[]).map((k) => [
+    k,
+    OVERVIEW[k].items.map((o) => ({ key: `${k}:${o.quoteKey}`, overview: o })),
+  ]),
+) as Record<OverviewKey, OverviewRowItem[]>;
+
+function overviewIcon(key: OverviewKey, size: number) {
+  return key === 'index' ? <IndexMark size={size} /> : <CategoryIcon kind="fx" size={size} />;
+}
 
 /** Her piyasanın satır nesneleri bir kez oluşturulur (arama sonuçları da aynı nesneleri kullanır). */
 const itemCache = new Map<MarketKey, { list: StockItem[]; byCode: Map<string, StockItem> }>();
@@ -259,11 +285,39 @@ function MarketDrawer({ open, onClose }: { open: boolean; onClose: () => void })
         : null,
     [query, searching],
   );
-  const noResults = results != null && MARKET_KEYS.every((m) => results[m].length === 0);
+  const overviewResults = useMemo<Record<OverviewKey, OverviewItem[]> | null>(
+    () =>
+      searching
+        ? {
+            index: searchOverview(query, OVERVIEW.index.items),
+            rates: searchOverview(query, OVERVIEW.rates.items),
+          }
+        : null,
+    [query, searching],
+  );
+  const noResults =
+    results != null &&
+    MARKET_KEYS.every((m) => results[m].length === 0) &&
+    overviewResults != null &&
+    overviewResults.index.length === 0 &&
+    overviewResults.rates.length === 0;
 
-  const sections: MarketSection[] = SECTION_DEFS.filter(
-    (d) => !results || (d.market && results[d.market].length > 0),
-  ).map((d) => {
+  const sections: MarketSection[] = SECTION_DEFS.filter((d) => {
+    if (!results || !overviewResults) return true;
+    return d.market ? results[d.market].length > 0 : overviewResults[d.overview].length > 0;
+  }).map((d) => {
+    if (d.overview) {
+      const found = overviewResults?.[d.overview];
+      const rows = OVERVIEW_ROWS[d.overview];
+      return {
+        key: d.key,
+        title: d.title,
+        available: true,
+        icon: overviewIcon(d.overview, 30),
+        total: found ? found.length : rows.length,
+        data: found ? rows.filter((r) => found.includes(r.overview)) : expanded === d.key ? rows : [],
+      };
+    }
     const m = d.market;
     let data: StockItem[] = [];
     if (m && results) {
@@ -291,8 +345,10 @@ function MarketDrawer({ open, onClose }: { open: boolean; onClose: () => void })
   const onViewable = useCallback(({ viewableItems }: { viewableItems: ListViewToken[] }) => {
     const symbols: string[] = [];
     for (const v of viewableItems) {
-      const item = v.item as StockItem | undefined;
-      if (item?.stock) symbols.push(...MARKETS[item.market].quoteKeys(item.stock.code));
+      // Bölüm başlıklarının kaydında satır yerine bölüm nesnesi gelir: yalnız satırlar alınır.
+      const item = v.item as Partial<StockItem & OverviewRowItem> | undefined;
+      if (item?.overview) symbols.push(item.overview.quoteKey);
+      else if (item?.stock && item.market) symbols.push(...MARKETS[item.market].quoteKeys(item.stock.code));
     }
     if (symbols.length) requestRef.current(symbols);
   }, []);
@@ -302,12 +358,19 @@ function MarketDrawer({ open, onClose }: { open: boolean; onClose: () => void })
   useEffect(() => {
     if (!open) return;
     const defs = results ? SECTION_DEFS : SECTION_DEFS.filter((d) => d.key === expanded);
+    const symbols: string[] = [];
+    // Endeks ve kur bölümleri kısa: hepsi birden istenir.
+    for (const d of defs) {
+      if (d.overview) {
+        const items = overviewResults ? overviewResults[d.overview] : OVERVIEW[d.overview].items;
+        symbols.push(...items.map((i) => i.quoteKey));
+      }
+    }
     const lists = defs.flatMap((d) =>
       d.market && !MARKETS[d.market].manual
         ? [[d.market, results ? results[d.market] : MARKETS[d.market].stocks] as const]
         : [],
     );
-    const symbols: string[] = [];
     let budget = FIRST_ROWS;
     for (const [m, list] of lists) {
       for (const stock of list.slice(0, budget)) symbols.push(...MARKETS[m].quoteKeys(stock.code));
@@ -315,7 +378,7 @@ function MarketDrawer({ open, onClose }: { open: boolean; onClose: () => void })
       if (budget === 0) break;
     }
     if (symbols.length) request(symbols);
-  }, [open, results, expanded, request]);
+  }, [open, results, overviewResults, expanded, request]);
 
   // Kripto açılınca tüm listenin fiyatı bir kerede (100'lük gruplarla) alınır; CoinGecko'nun ücretsiz
   // servisi dakikalık istek sınırı uyguladığı için kaydırdıkça ayrı ayrı istemekten daha güvenli.
@@ -329,6 +392,16 @@ function MarketDrawer({ open, onClose }: { open: boolean; onClose: () => void })
     (market: MarketKey, code: string) => {
       onClose();
       router.push({ pathname: '/add', params: { kind: MARKETS[market].kind, symbol: code } });
+    },
+    [onClose],
+  );
+
+  // Dövizlere dokununca portföye eklenir; endeksler yalnız izlenir.
+  const openOverview = useCallback(
+    (o: OverviewItem) => {
+      if (!o.asset) return;
+      onClose();
+      router.push({ pathname: '/add', params: { kind: o.asset.kind, symbol: o.asset.symbol } });
     },
     [onClose],
   );
@@ -420,7 +493,12 @@ function MarketDrawer({ open, onClose }: { open: boolean; onClose: () => void })
               }}
             />
           )}
-          renderItem={({ item }) => {
+          renderItem={({ item }: { item: ListItem }) => {
+            if ('overview' in item) {
+              return (
+                <OverviewRow item={item.overview} quote={allQuotes[item.overview.quoteKey]} onPress={openOverview} />
+              );
+            }
             const def = MARKETS[item.market];
             // Görünen satırların fiyatları + portföyde zaten olanlar; emtia kurla hesaplanır, fonlar elle girilir.
             const q = resolveAssetQuote(def.kind, item.stock.code, allQuotes, manualPrices);
@@ -498,6 +576,67 @@ function SectionHeader({
     </View>
   );
 }
+
+const OverviewRow = memo(function OverviewRow({
+  item,
+  quote,
+  onPress,
+}: {
+  item: OverviewItem;
+  quote?: RawQuote;
+  onPress: (item: OverviewItem) => void;
+}) {
+  const c = useColors();
+  const change =
+    quote?.previousClose != null && quote.previousClose > 0
+      ? ((quote.price - quote.previousClose) / quote.previousClose) * 100
+      : undefined;
+  const barColor = change == null || change === 0 ? c.border : pnlColor(c, change);
+  const value = quote
+    ? item.currency
+      ? formatPrice(quote.price, item.currency)
+      : formatNumber(quote.price, 2, 2)
+    : '—';
+  return (
+    <Pressable
+      onPress={() => onPress(item)}
+      disabled={!item.asset}
+      accessibilityRole={item.asset ? 'button' : 'text'}
+      accessibilityLabel={`${item.code} ${item.name}`}
+      style={({ pressed }) => [
+        styles.stockCard,
+        { backgroundColor: c.card, borderColor: c.border },
+        pressed && { opacity: 0.6 },
+      ]}>
+      <View style={[styles.stockBar, { backgroundColor: barColor }]} />
+      {'flag' in item.icon ? (
+        <FlagIcon code={item.icon.flag} size={36} />
+      ) : (
+        <PairIcon main={item.icon.pair[0]} second={item.icon.pair[1]} size={36} />
+      )}
+      <View style={styles.stockMain}>
+        <Text style={[Type.headline, { color: c.text, fontSize: 15 }]} numberOfLines={1}>
+          {item.code}
+        </Text>
+        <Text style={[Type.subhead, { color: c.textSecondary, fontSize: 12 }]} numberOfLines={1}>
+          {item.name}
+        </Text>
+      </View>
+      <View style={styles.priceCol}>
+        <Text style={[Type.number, styles.price, { color: quote ? c.text : c.textTertiary }]} numberOfLines={1}>
+          {value}
+        </Text>
+        <View style={[styles.change, { backgroundColor: change != null ? pnlSoft(c, change) : c.chip }]}>
+          <Text
+            style={[Type.caption, styles.changeText, { color: change != null ? pnlColor(c, change) : c.textTertiary }]}>
+            {change != null ? formatPct(change) : '—'}
+          </Text>
+        </View>
+      </View>
+      <TrendIcon change={change} up={c.positive} down={c.negative} flat={c.textTertiary} size={22} />
+    </Pressable>
+  );
+});
 
 const StockRow = memo(function StockRow({
   item,

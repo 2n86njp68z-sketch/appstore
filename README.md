@@ -19,7 +19,7 @@ Expo (React Native) ile yazıldı. Geliştirmek ve App Store'a göndermek için 
   - Hisse ve kriptolarda dilim rengiyle harf rozeti.
 - **Piyasalar menüsü (sol üstteki ☰):**
   - En üstte arama çubuğu var. Kod ya da şirket adı yazdıkça sonuçlar anında süzülür, Türkçe harf farkı önemli değildir.
-  - Bölümler: Türk Market, TEFAS, BES (Türk bayraklılar), ABD Market, ABD ETF (ABD bayraklılar), Emtia, Kripto.
+  - Bölümler: Türk Market, TEFAS, BES (Türk bayraklılar), ABD Market, ABD ETF (ABD bayraklılar), Emtia, Kripto, Endeks, Kurlar.
   - Bölüme dokununca kalemler alt alta kutucuklar halinde açılır. Aynı anda tek bölüm açık kalır.
   - Kutunun solundaki çubuk ve sağdaki yön çizgisi yükselende yeşil, düşende kırmızı.
   - Türk Market, TEFAS ve BES'te Türk bayrağı; ABD Market ve ABD ETF'te ABD bayrağı.
@@ -29,6 +29,8 @@ Expo (React Native) ile yazıldı. Geliştirmek ve App Store'a göndermek için 
     - TEFAS: 2.106 yatırım fonu
     - BES: 288 emeklilik yatırım fonu
     - Kripto: piyasa değerine göre ilk 491 coin
+    - Endeks: S&P 500, Nasdaq 100, BIST 100 (yalnız izlenir, portföye eklenmez)
+    - Kurlar: Dolar (USD/TRY) ve Euro (EUR/TRY); dokununca portföye döviz olarak eklenir
     - ABD ETF: ABD borsalarındaki 5.830 ETF; en bilinenler (SPY, VOO, IVV, QQQ…) en üstte, logolar çıkaran şirketin sitesinden
   - Her satırda logo, kod, şirket adı, fiyat ve günlük değişim yazar.
   - Arama tüm bölümlerde birden yapılır.
@@ -155,5 +157,6 @@ Göndermeden önce `app.json` içindeki `ios.bundleIdentifier` değerini (şu an
   - Sağlayıcı değişirse yalnızca `src/lib/prices.ts` değişir.
 - Geçmiş kurlar da Yahoo Finance'ten günlük kapanış olarak alınıyor. Gün içi kur farkı dikkate alınmıyor.
 - TEFAS/BES fon fiyatları elle giriliyor (yukarıda nedeni yazıyor).
+- Türkiye CDS'i yok: güncel CDS yayımlayan siteler (investing.com, Bloomberg HT, doviz.com) ya ücretli ya da otomatik veri çekmeye izin vermiyor; ücretsiz `fveri.com` verisi Haziran 2026'da kalmış. Lisanslı bir kaynak bulununca Kurlar bölümüne eklenebilir.
 - TÜFE, TCMB sayfasındaki tablodan okunuyor; sayfanın düzeni değişirse okuma bozulabilir (o zaman OECD'ye düşer). Daha sağlam yol TCMB EVDS servisi (`evds3.tcmb.gov.tr`, ücretsiz ama kişisel API anahtarı ister).
 - Veriler yalnızca telefonda duruyor. Uygulama silinirse veriler de silinir. Yedekleme ileride eklenebilir.
