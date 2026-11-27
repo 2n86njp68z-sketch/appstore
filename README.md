@@ -19,7 +19,7 @@ Expo (React Native) ile yazıldı. Geliştirmek ve App Store'a göndermek için 
   - Hisse ve kriptolarda dilim rengiyle harf rozeti.
 - **Piyasalar menüsü (sol üstteki ☰):**
   - En üstte arama çubuğu var. Kod ya da şirket adı yazdıkça sonuçlar anında süzülür, Türkçe harf farkı önemli değildir.
-  - Bölümler: Türk Market, ABD Market, Emtia, TEFAS, BES, Kripto, ABD ETF.
+  - Bölümler: Türk Market, TEFAS, BES (Türk bayraklılar), ABD Market, ABD ETF (ABD bayraklılar), Emtia, Kripto.
   - Bölüme dokununca kalemler alt alta kutucuklar halinde açılır. Aynı anda tek bölüm açık kalır.
   - Kutunun solundaki çubuk ve sağdaki yön çizgisi yükselende yeşil, düşende kırmızı.
   - Türk Market, TEFAS ve BES'te Türk bayrağı; ABD Market ve ABD ETF'te ABD bayrağı.
@@ -39,7 +39,7 @@ Expo (React Native) ile yazıldı. Geliştirmek ve App Store'a göndermek için 
   - Sonuç yüzde olarak yazar: "+%12" portföyün ölçütten %12 önde olduğunu, "−%5" geride olduğunu gösterir. Altında "ölçütü alsaydın bugün ne olurdu" tutarı yazar.
   - BIST 100: temettüler dahil getiri endeksi (XU100_CFNNTLTL), Borsa İstanbul'un kendi sitesinden. Alınamazsa ya da güncel değilse XU100 fiyat endeksine (temettüler hariç) düşülür; kartta hangisinin kullanıldığı yazar.
   - S&P 500: temettüler dahil getiri endeksi (^SP500TR), her günün dolar kuruyla TL'ye çevrilir.
-  - Enflasyon: TÜİK TÜFE (aylık endeks), OECD istatistik servisinden. Son açıklanan aydan sonraki alışlar için enflasyon henüz bilinmediğinden tutar olduğu gibi alınır; kartta verinin hangi aya kadar olduğu yazar.
+  - Enflasyon: TÜİK TÜFE, TCMB'nin enflasyon sayfasından (güncel, anahtar gerekmez). Sayfadaki aylık % değişimler art arda çarpılarak endeks kurulur. Son açıklanan aydan sonraki alışlar için enflasyon henüz bilinmediğinden tutar olduğu gibi alınır; kartta verinin hangi aya kadar olduğu yazar.
 - **Varlık türleri:**
   - Türk Market: Borsa İstanbul hisseleri (THYAO, ASELS…)
   - ABD Market: ABD hisseleri (AAPL, BRK.B…)
@@ -94,7 +94,7 @@ tests/                  Birim testleri
 - Fiyatlar:
   - Hisse, ETF, döviz, emtia ve endeksler (XU100, ^SP500TR): Yahoo Finance
   - BIST 100 getiri endeksi: Borsa İstanbul (`borsaistanbul.com`). Uzun geçmiş dosyası (~500 KB) yalnız yeni kapanış açıklanınca iner, anlık değer saatte bir yenilenir. Site tarayıcıdan erişime izin vermediği için web sürümünde fiyat endeksi kullanılır.
-  - Enflasyon (TÜİK TÜFE): OECD istatistik servisi (`sdmx.oecd.org`). TÜİK'in kendi veri servisi giriş istiyor.
+  - Enflasyon (TÜİK TÜFE): TCMB enflasyon sayfası (`www.tcmb.gov.tr`, Ocak 2005'ten bu yana aylık değişimler). Alınamazsa OECD istatistik servisi (`sdmx.oecd.org`, Aralık 2025'e kadar). TCMB sitesi tarayıcıdan erişime izin vermediği için web sürümünde OECD kullanılır.
   - Kripto: CoinGecko, coin kimliğiyle; aynı kısaltmalı coinler karışmaz
   - Fonlar (TEFAS/BES): **elle girilir.** Günlük fon fiyatları yalnız TEFAS'ta var ve TEFAS sitesi otomatik erişime karşı korunuyor. Lisanslı bir veri kaynağı bağlanınca otomatik olabilir.
 - ABD'de bilinen şirketlerin hepsinin internet adresi var. Wikidata'da kaydı olmayan küçük şirketlerde (yaklaşık 3.700) harf rozeti görünür.
@@ -155,5 +155,5 @@ Göndermeden önce `app.json` içindeki `ios.bundleIdentifier` değerini (şu an
   - Sağlayıcı değişirse yalnızca `src/lib/prices.ts` değişir.
 - Geçmiş kurlar da Yahoo Finance'ten günlük kapanış olarak alınıyor. Gün içi kur farkı dikkate alınmıyor.
 - TEFAS/BES fon fiyatları elle giriliyor (yukarıda nedeni yazıyor).
-- OECD'deki Türkiye TÜFE serisi şu an Aralık 2025'te bitiyor. Güncel TÜFE için TCMB EVDS (ücretsiz, kayıt ve API anahtarı ister) bağlanabilir.
+- TÜFE, TCMB sayfasındaki tablodan okunuyor; sayfanın düzeni değişirse okuma bozulabilir (o zaman OECD'ye düşer). Daha sağlam yol TCMB EVDS servisi (`evds3.tcmb.gov.tr`, ücretsiz ama kişisel API anahtarı ister).
 - Veriler yalnızca telefonda duruyor. Uygulama silinirse veriler de silinir. Yedekleme ileride eklenebilir.

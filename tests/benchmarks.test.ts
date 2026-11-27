@@ -6,8 +6,10 @@ import { computeBenchmarks, simulate, type BenchSeries } from '../src/lib/benchm
 import { MARKETS, stockInfo } from '../src/lib/markets';
 import { FxRates } from '../src/lib/portfolio';
 import {
+  cpiFromMonthlyChanges,
   fetchBistIndex,
   fetchTurkeyCpi,
+  parseTcmbCpiHtml,
   parseBistIndexCurrent,
   parseBistIndexHistory,
   parseOecdCpiCsv,
@@ -138,18 +140,70 @@ test('OECD TÜFE CSV: aylık seri, sıralı, boş ve yıllık satırlar atlanır
   assert.equal(parseOecdCpiCsv(''), null);
 });
 
-test('fetchTurkeyCpi: başlangıç yılıyla ister, geçici hatada bir kez daha dener', async () => {
+const TCMB_HTML = `<html><body><table class="x">
+<tr><th>Ay-Yıl</th><th>TÜFE (Yıllık % Değişim)</th><th>TÜFE (Aylık % Değişim)</th></tr>
+<tr><td><p>10-2026</p></td><td>29.77</td><td>2.58</td></tr>
+<tr><td>09-2026</td><td>29.73</td><td>1.84</td></tr>
+<tr><td>08-2026</td><td>31.51</td><td>-0,50</td></tr>
+<tr><td>13-2026</td><td>1</td><td>1</td></tr>
+<tr><td>Not</td><td></td><td></td></tr>
+</table></body></html>`;
+
+test('TCMB enflasyon tablosu: aylık değişimler sıralı okunur, endeks art arda çarpılarak kurulur', () => {
+  const changes = parseTcmbCpiHtml(TCMB_HTML);
+  assert.deepEqual(changes, [
+    { month: '2026-08', pct: -0.5 },
+    { month: '2026-09', pct: 1.84 },
+    { month: '2026-10', pct: 2.58 },
+  ]);
+  const s = cpiFromMonthlyChanges(changes, 5)!;
+  assert.deepEqual(s.dates, ['2026-07-01', '2026-08-01', '2026-09-01', '2026-10-01']);
+  close(s.rates[0], 100);
+  close(s.rates[3], 100 * 0.995 * 1.0184 * 1.0258);
+  assert.equal(s.fetchedAt, 5);
+  // Ay atlanırsa orada durulur
+  const gap = cpiFromMonthlyChanges([
+    { month: '2025-11', pct: 1 },
+    { month: '2025-12', pct: 1 },
+    { month: '2026-02', pct: 1 },
+  ])!;
+  assert.deepEqual(gap.dates, ['2025-10-01', '2025-11-01', '2025-12-01']);
+  assert.equal(cpiFromMonthlyChanges([]), null);
+  assert.deepEqual(parseTcmbCpiHtml('<p>yok</p>'), []);
+});
+
+test('fetchTurkeyCpi: önce TCMB; olmazsa OECD (geçici hatada bir kez daha dener)', async () => {
   const calls: string[] = [];
-  const fn = async (url: string) => {
+  const ok = (body: string) => ({ ok: true, status: 200, json: async () => ({}), text: async () => body });
+  const err = (status: number) => ({ ok: false, status, json: async () => ({}), text: async () => '' });
+
+  const tcmbOk = async (url: string) => (calls.push(url), ok(TCMB_HTML));
+  // Örnek tablo Temmuz 2026'dan başlıyor: 2027 başından itibaren istenince yeterli
+  const s = await fetchTurkeyCpi(2027, tcmbOk);
+  assert.equal(calls.length, 1);
+  assert.match(calls[0], /tcmb\.gov\.tr/);
+  assert.equal(s.dates.at(-1), '2026-10-01');
+
+  // 2024'ten isteniyorsa TCMB tablosu kısa kalır → OECD
+  calls.length = 0;
+  let oecdTries = 0;
+  const mixed = async (url: string) => {
     calls.push(url);
-    if (calls.length === 1) return { ok: false, status: 500, json: async () => ({}), text: async () => '' };
-    return { ok: true, status: 200, json: async () => ({}), text: async () => CSV };
+    if (url.includes('tcmb')) return ok(TCMB_HTML);
+    return ++oecdTries === 1 ? err(500) : ok(CSV);
   };
-  const s = await fetchTurkeyCpi(2024, fn);
-  assert.equal(calls.length, 2);
-  assert.match(calls[0], /TUR\.M\.N\.CPI\.IX/);
-  assert.match(calls[0], /startPeriod=2024-01/);
-  assert.equal(s.dates.at(-1), '2025-12-01');
+  const o = await fetchTurkeyCpi(2024, mixed);
+  assert.equal(calls.filter((u) => u.includes('oecd')).length, 2, 'OECD bir kez daha denenir');
+  assert.match(
+    calls.find((u) => u.includes('oecd'))!,
+    /TUR\.M\.N\.CPI\.IX.*startPeriod=2024-01/,
+  );
+  assert.equal(o.dates.at(-1), '2025-12-01');
+
+  // Web: TCMB hiç denenmez
+  calls.length = 0;
+  await fetchTurkeyCpi(2024, async (url: string) => (calls.push(url), ok(CSV)), { tcmb: false });
+  assert.ok(calls.every((u) => u.includes('oecd')));
 });
 
 test('ABD ETF listesi: binlerce fon, Yahoo sembolü, ihraççı sitesi', () => {

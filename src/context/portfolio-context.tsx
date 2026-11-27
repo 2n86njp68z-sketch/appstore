@@ -88,7 +88,12 @@ async function refreshBenchSeries(transactions: Transaction[], current: BenchSer
   const cpiFrom = `${earliest.slice(0, 7)}-01`;
   if (stale(current.CPI, 24 * 60 * 60 * 1000, cpiFrom)) {
     // Bir yıl öncesinden istenir: en eski alış son açıklanan aydan sonra olsa bile son ay bilinsin.
-    jobs.push(fetchTurkeyCpi(Number(earliest.slice(0, 4)) - 1).then((s) => ['CPI', s]));
+    jobs.push(
+      fetchTurkeyCpi(Number(earliest.slice(0, 4)) - 1, undefined, { tcmb: Platform.OS !== 'web' }).then((s) => [
+        'CPI',
+        s,
+      ]),
+    );
   }
   if (jobs.length === 0) return null;
   const results = await Promise.allSettled(jobs);

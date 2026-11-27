@@ -157,13 +157,14 @@ interface MarketSection {
 }
 
 const SECTION_DEFS: { key: string; title: string; kind: AssetKind; market?: MarketKey }[] = [
+  // Türk bayraklılar, ABD bayraklılar alt alta; ardından emtia ve kripto.
   { key: 'bist', title: 'Türk Market', kind: 'bist', market: 'bist' },
-  { key: 'us', title: 'ABD Market', kind: 'us', market: 'us' },
-  { key: 'metal', title: 'Emtia', kind: 'metal', market: 'metal' },
   { key: 'fund', title: 'TEFAS', kind: 'fund', market: 'fund' },
   { key: 'bes', title: 'BES', kind: 'bes', market: 'bes' },
-  { key: 'crypto', title: 'Kripto', kind: 'crypto', market: 'crypto' },
+  { key: 'us', title: 'ABD Market', kind: 'us', market: 'us' },
   { key: 'etf', title: 'ABD ETF', kind: 'etf', market: 'etf' },
+  { key: 'metal', title: 'Emtia', kind: 'metal', market: 'metal' },
+  { key: 'crypto', title: 'Kripto', kind: 'crypto', market: 'crypto' },
 ];
 
 const MARKET_KEYS = SECTION_DEFS.map((d) => d.market).filter(Boolean) as MarketKey[];

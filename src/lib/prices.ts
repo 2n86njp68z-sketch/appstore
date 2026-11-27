@@ -33,11 +33,11 @@ export function parseYahooChart(json: unknown, now: number = Date.now()): RawQuo
   return { price, previousClose: prev, name: name?.trim(), fetchedAt: now };
 }
 
-async function fetchWithTimeout(fetchFn: FetchLike, url: string, timeoutMs = TIMEOUT_MS) {
+async function fetchWithTimeout(fetchFn: FetchLike, url: string, timeoutMs = TIMEOUT_MS, accept = 'application/json') {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    return await fetchFn(url, { signal: controller.signal, headers: { Accept: 'application/json' } });
+    return await fetchFn(url, { signal: controller.signal, headers: { Accept: accept } });
   } finally {
     clearTimeout(timer);
   }
@@ -293,7 +293,71 @@ export async function fetchAnyQuotes(
 }
 
 // ---------------------------------------------------------------------------
-// Enflasyon: TÜİK TÜFE (aylık endeks, 2015=100), OECD istatistik servisi üzerinden
+// Enflasyon: TÜİK TÜFE. Asıl kaynak TCMB'nin enflasyon sayfası (anahtarsız, güncel; 2005'ten bu yana aylık
+// % değişimler). Aylık değişimler art arda çarpılarak endeks kurulur. Alınamazsa OECD'deki endekse düşülür.
+
+const TCMB_CPI = 'https://www.tcmb.gov.tr/wps/wcm/connect/tr/tcmb+tr/main+menu/istatistikler/enflasyon+verileri';
+
+/** TCMB enflasyon tablosundan ay → TÜFE aylık % değişim ("2026-10" → 2,58), eskiden yeniye. */
+export function parseTcmbCpiHtml(html: string): { month: string; pct: number }[] {
+  const out = new Map<string, number>();
+  const cell = (c: string) =>
+    c
+      .replace(/<[^>]+>/g, '')
+      .replace(/&nbsp;/g, ' ')
+      .trim();
+  for (const row of html.match(/<tr[\s\S]*?<\/tr>/gi) ?? []) {
+    const cells = (row.match(/<t[dh][\s\S]*?<\/t[dh]>/gi) ?? []).map(cell);
+    const m = cells[0]?.match(/^(\d{1,2})-(\d{4})$/);
+    if (!m || cells.length < 3) continue;
+    const month = Number(m[1]);
+    const pct = Number(cells[2].replace('%', '').replace(',', '.'));
+    if (month < 1 || month > 12 || !Number.isFinite(pct) || cells[2] === '') continue;
+    out.set(`${m[2]}-${String(month).padStart(2, '0')}`, pct);
+  }
+  return [...out.keys()].sort().map((month) => ({ month, pct: out.get(month)! }));
+}
+
+function nextMonth(ym: string): string {
+  const [y, m] = ym.split('-').map(Number);
+  return m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, '0')}`;
+}
+
+function prevMonth(ym: string): string {
+  const [y, m] = ym.split('-').map(Number);
+  return m === 1 ? `${y - 1}-12` : `${y}-${String(m - 1).padStart(2, '0')}`;
+}
+
+/**
+ * Aylık % değişimlerden endeks: ilk değişimden önceki ay 100, her ay bir öncekinin (1 + değişim) katı.
+ * Aylar kesintisiz olmalı; araya boşluk girerse orada durulur.
+ */
+export function cpiFromMonthlyChanges(
+  changes: { month: string; pct: number }[],
+  now: number = Date.now(),
+): FxSeries | null {
+  if (changes.length === 0) return null;
+  const dates = [`${prevMonth(changes[0].month)}-01`];
+  const rates = [100];
+  let expected = changes[0].month;
+  for (const { month, pct } of changes) {
+    if (month !== expected) break;
+    dates.push(`${month}-01`);
+    rates.push(rates[rates.length - 1] * (1 + pct / 100));
+    expected = nextMonth(month);
+  }
+  return dates.length > 1 ? { dates, rates, fetchedAt: now } : null;
+}
+
+async function fetchTcmbCpi(fetchFn: FetchLike): Promise<FxSeries> {
+  const res = await fetchWithTimeout(fetchFn, TCMB_CPI, 20_000, 'text/html');
+  if (!res.ok || !res.text) throw new Error(`HTTP ${res.status}`);
+  const series = cpiFromMonthlyChanges(parseTcmbCpiHtml(await res.text()));
+  if (!series) throw new Error('TCMB enflasyon tablosu okunamadı');
+  return series;
+}
+
+// Yedek: OECD istatistik servisindeki TÜFE endeksi (2015=100; şu an Aralık 2025'te bitiyor)
 
 const OECD_CPI = 'https://sdmx.oecd.org/public/rest/data/OECD.SDD.TPS,DSD_PRICES@DF_PRICES_ALL,/TUR.M.N.CPI.IX._T.N._Z';
 
@@ -317,10 +381,27 @@ export function parseOecdCpiCsv(text: string, now: number = Date.now()): FxSerie
   return { dates, rates: dates.map((d) => points.get(d)!), fetchedAt: now };
 }
 
+/**
+ * TÜFE endeksi: önce TCMB (güncel), olmazsa OECD. startYear yalnız OECD isteğinde kullanılır.
+ * TCMB sitesi tarayıcıdan erişime (CORS) izin vermediği için web sürümü tcmb: false ile çağırır.
+ */
 export async function fetchTurkeyCpi(
   startYear: number,
   fetchFn: FetchLike = fetch as unknown as FetchLike,
+  { tcmb = true }: { tcmb?: boolean } = {},
 ): Promise<FxSeries> {
+  if (tcmb) {
+    try {
+      const series = await fetchTcmbCpi(fetchFn);
+      if (series.dates[0] <= `${startYear}-01-01`) return series;
+    } catch {
+      // OECD'ye düşülür.
+    }
+  }
+  return fetchOecdCpi(startYear, fetchFn);
+}
+
+async function fetchOecdCpi(startYear: number, fetchFn: FetchLike): Promise<FxSeries> {
   const url = `${OECD_CPI}?startPeriod=${startYear}-01&dimensionAtObservation=AllDimensions&format=csvfile`;
   let lastError: unknown;
   // Servis ara sıra 5xx dönüyor; bir kez daha denenir.
