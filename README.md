@@ -59,6 +59,12 @@ Expo (React Native) ile yazıldı. Geliştirmek ve App Store'a göndermek için 
   - Eurobond: miktar nominal olarak girilir, fiyat 100 nominal başınadır; değer = nominal × fiyat / 100
   - "Diğer": fiyatını elle girdiğin mevduat vb.
 - **Alış/satış kaydı:** Ortalama maliyet ve gerçekleşen kâr/zarar hesaplanır
+- **Bedelsiz ve temettü:** Elde tutulan hisselerin bedelsiz sermaye artırımları/bölünmeleri ve nakit temettüleri kendiliğinden işlenir (günde bir yenilenir).
+  - Bedelsiz/bölünme: hak kullanım gününden önce alınan paylar çoğalır, pay başı maliyet aynı oranda düşer; toplam maliyet değişmez. İşlem listesinde girdiğin adetler görünür.
+  - Temettü: hak kullanım gününden önce eldeki pay × pay başına net temettü; kâr/zarara eklenir, varlık detayında "Temettü ve bedelsiz" listesinde görünür.
+  - BIST: İş Yatırım şirket kartındaki resmi kayıtlar (temettünün stopaj sonrası net tutarı). ABD hisse ve ETF: Yahoo'nun bölünme/temettü olayları; temettüden ABD'de kaynakta kesilen %20 vergi düşülür.
+  - Bedelli sermaye artırımı ödeme gerektirdiği için otomatik işlenmez; katıldıysan alış olarak ekle.
+  - Karşılaştırma kartında portföy değerine alınan temettüler de eklenir.
 - **Fiyatlar:** Otomatik çekilir. Aşağı çekince ve uygulama öne gelince yenilenir.
 - **Kayıt:** Veriler yalnızca telefonda tutulur. Hesap ya da sunucu gerekmez.
 - **Görünüm:** Telefonun ayarına göre gündüz beyaz, gece siyah. Yazı tipi Manrope (₺ ve Türkçe harf destekli).
@@ -190,4 +196,5 @@ Göndermeden önce `app.json` içindeki `ios.bundleIdentifier` değerini (şu an
 - TEFAS fon servisi resmi olarak belgelenmemiştir; değişirse fon fiyatları gelmez (o zaman fiyat elle girilebilir).
 - Türkiye CDS'i yok: güncel CDS yayımlayan siteler (investing.com, Bloomberg HT, doviz.com) ya ücretli ya da otomatik veri çekmeye izin vermiyor; ücretsiz `fveri.com` verisi Haziran 2026'da kalmış. Lisanslı bir kaynak bulununca Kurlar bölümüne eklenebilir.
 - TÜFE, TCMB sayfasındaki tablodan okunuyor; sayfanın düzeni değişirse okuma bozulabilir (o zaman OECD'ye düşer). Daha sağlam yol TCMB EVDS servisi (`evds3.tcmb.gov.tr`, ücretsiz ama kişisel API anahtarı ister).
+- Bedelsiz ve temettü kayıtları web sürümünde alınamıyor (kaynaklar tarayıcıdan erişime izin vermiyor); telefondaki uygulamada çalışır.
 - Veriler yalnızca telefonda duruyor. Uygulama silinirse veriler de silinir. Yedekleme ileride eklenebilir.

@@ -41,7 +41,7 @@ const SYMBOL_PATTERN = /^[A-Z0-9.\-_^=]{1,20}$/;
 export default function AddTransactionScreen() {
   const c = useColors();
   const params = useLocalSearchParams<{ kind?: string; symbol?: string; side?: string }>();
-  const { transactions, addTransaction, quotes } = usePortfolio();
+  const { transactions, addTransaction, quotes, actionsByKey } = usePortfolio();
 
   const initialKind = ASSET_KINDS.some((k) => k.kind === params.kind) ? (params.kind as AssetKind) : 'bist';
   const lockedAsset = Boolean(params.kind && params.symbol);
@@ -61,7 +61,10 @@ export default function AddTransactionScreen() {
 
   const info = kindInfo(kind);
   const symbol = kind === 'fx' ? fxSymbol : kind === 'metal' ? metalSymbol : normalizeSymbol(kind, symbolInput);
-  const held = useMemo(() => heldQuantity(transactions, kind, symbol), [transactions, kind, symbol]);
+  const held = useMemo(
+    () => heldQuantity(transactions, kind, symbol, actionsByKey[`${kind}:${symbol}`]),
+    [transactions, kind, symbol, actionsByKey],
+  );
   const currency = assetCurrency(kind, symbol);
   const quantityLabel = quantityLabelFor(kind, symbol);
   const manual = isManualPriced(kind);

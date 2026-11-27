@@ -12,11 +12,13 @@ import {
   TROY_OUNCE_GRAMS,
   USDTRY_SYMBOL,
 } from './assets';
+import { applySplits, corporateEvents } from './corporate';
 import { stockInfo } from './markets';
 import type {
   AllocationSlice,
   AssetKind,
   AssetQuote,
+  CorporateAction,
   Currency,
   DisplayCurrency,
   FxHistory,
@@ -226,6 +228,8 @@ export function computeHoldings(
   raw: Record<string, RawQuote>,
   manualPrices: Record<string, number>,
   history: FxHistory = {},
+  /** Varlık anahtarına göre bedelsiz/bölünme ve temettü kayıtları. */
+  actionsByKey: Record<string, CorporateAction[]> = {},
 ): Holding[] {
   const groups = new Map<string, Transaction[]>();
   for (const t of transactions) {
@@ -242,7 +246,12 @@ export function computeHoldings(
     const { kind, symbol } = list[0];
     const native = assetCurrency(kind, symbol);
     const sorted = sortTransactions(list);
-    const pos = computePosition(sorted);
+    // Bedelsiz/bölünmeler önceki işlemlerin adet ve fiyatını düzeltir; temettüler kâra eklenir.
+    const actions = actionsByKey[key] ?? [];
+    const adjusted = applySplits(sorted, actions);
+    const events = corporateEvents(sorted, actions);
+    const dividendsNative = events.dividends.reduce((sum, d) => sum + d.amount, 0);
+    const pos = computePosition(adjusted);
     const quote = resolveAssetQuote(kind, symbol, raw, manualPrices);
     const priceMissing = !quote;
     const price = quote?.price ?? pos.avgCost;
@@ -262,7 +271,7 @@ export function computeHoldings(
 
     const views: Holding['views'] = {};
     for (const cur of DISPLAY_CURRENCIES) {
-      const ledger = ledgerIn(sorted, native, cur, fx);
+      const ledger = ledgerIn(adjusted, native, cur, fx);
       const nowRate = fx.now(native);
       const curNow = fx.now(cur);
       if (!ledger.ok || nowRate == null || curNow == null) continue;
@@ -273,13 +282,20 @@ export function computeHoldings(
         const prevValue = convert(units * prev, fx.previous(native), fx.previous(cur));
         if (prevValue != null) viewDayChange = value - prevValue;
       }
-      const pnl = value - ledger.cost;
+      // Temettüler alındıkları günün kuruyla
+      let dividends = 0;
+      for (const d of events.dividends) {
+        const conv = native === cur ? d.amount : convert(d.amount, fx.on(native, d.date), fx.on(cur, d.date));
+        if (conv != null) dividends += conv;
+      }
+      const pnl = value - ledger.cost + dividends;
       views[cur] = {
         value,
         cost: ledger.cost,
         pnl,
         pnlPct: ledger.cost > 0 ? (pnl / ledger.cost) * 100 : 0,
         realized: ledger.realized,
+        dividends,
         dayChange: viewDayChange,
       } satisfies MoneyView;
     }
@@ -297,6 +313,9 @@ export function computeHoldings(
       realizedPnl: pos.realizedPnl,
       priceMissing,
       priceManual: quote?.manual === true,
+      dividends: dividendsNative,
+      dividendEvents: events.dividends,
+      splitEvents: events.splits,
       price,
       previousClose: prev,
       marketValue,
@@ -319,17 +338,18 @@ export function computeHoldings(
 }
 
 function emptyTotals(): MoneyTotals {
-  return { value: 0, cost: 0, pnl: 0, pnlPct: 0, dayChange: 0, dayChangePct: 0, incomplete: false };
+  return { value: 0, cost: 0, pnl: 0, pnlPct: 0, dayChange: 0, dayChangePct: 0, dividends: 0, incomplete: false };
 }
 
 function addTo(t: MoneyTotals, v: MoneyView) {
   t.value += v.value;
   t.cost += v.cost;
   t.dayChange += v.dayChange ?? 0;
+  t.dividends += v.dividends;
 }
 
 function finish(t: MoneyTotals): MoneyTotals {
-  t.pnl = t.value - t.cost;
+  t.pnl = t.value - t.cost + t.dividends;
   t.pnlPct = t.cost > 0 ? (t.pnl / t.cost) * 100 : 0;
   const prevValue = t.value - t.dayChange;
   t.dayChangePct = prevValue > 0 ? (t.dayChange / prevValue) * 100 : 0;
@@ -380,6 +400,17 @@ export function computeSummary(holdings: Holding[]): PortfolioSummary {
 }
 
 /** Bir varlıkta şu an eldeki miktar (satış doğrulaması için). */
-export function heldQuantity(transactions: Transaction[], kind: AssetKind, symbol: string): number {
-  return computePosition(transactions.filter((t) => t.kind === kind && t.symbol === symbol)).quantity;
+/** Eldeki miktar; bedelsiz/bölünmeler uygulanmış (satış kontrolü için). */
+export function heldQuantity(
+  transactions: Transaction[],
+  kind: AssetKind,
+  symbol: string,
+  actions: CorporateAction[] = [],
+): number {
+  return computePosition(
+    applySplits(
+      transactions.filter((t) => t.kind === kind && t.symbol === symbol),
+      actions,
+    ),
+  ).quantity;
 }

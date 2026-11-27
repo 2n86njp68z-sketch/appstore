@@ -78,6 +78,11 @@ export interface Holding {
   priceMissing: boolean;
   /** Fiyat elle girildiyse true. */
   priceManual?: boolean;
+  /** Alınan net temettüler toplamı (varlığın para biriminde). */
+  dividends: number;
+  /** Elde tutulurken alınan temettüler ve geçirilen bölünmeler/bedelsizler. */
+  dividendEvents: { date: string; perShare: number; quantity: number; amount: number }[];
+  splitEvents: { date: string; split: number; before: number; after: number }[];
   price: number;
   previousClose?: number;
   marketValue: number;
@@ -99,10 +104,22 @@ export interface Holding {
 export interface MoneyView {
   value: number;
   cost: number;
+  /** Kâr/zarar: değer − maliyet + alınan temettüler. */
   pnl: number;
   pnlPct: number;
   realized: number;
+  /** Alınan net temettüler (her biri kendi günündeki kurla). */
+  dividends: number;
   dayChange?: number;
+}
+
+/** Bedelsiz/bölünme ve nakit temettü; tarih hak kullanım (ex) günü "YYYY-AA-GG". */
+export interface CorporateAction {
+  date: string;
+  /** Bölünme/bedelsiz çarpanı: 1 eski pay → split yeni pay (ör. %100 bedelsiz → 2). */
+  split?: number;
+  /** Pay başına net nakit temettü (o günün pay sayısına göre, varlığın para biriminde). */
+  dividend?: number;
 }
 
 export interface MoneyTotals {
@@ -111,6 +128,8 @@ export interface MoneyTotals {
   pnl: number;
   pnlPct: number;
   dayChange: number;
+  /** Alınan net temettüler. */
+  dividends: number;
   dayChangePct: number;
   /** Kur eksik olduğu için toplama katılamayan varlık var mı? */
   incomplete: boolean;

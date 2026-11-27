@@ -1,7 +1,10 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import type { BenchSeries } from './benchmarks';
-import type { DisplayCurrency, FxHistory, RawQuote, Transaction } from './types';
+import type { CorporateAction, DisplayCurrency, FxHistory, RawQuote, Transaction } from './types';
+
+/** Varlık anahtarına göre bedelsiz/temettü kayıtları ve ne zaman çekildikleri. */
+export type StoredActions = Record<string, { fetchedAt: number; actions: CorporateAction[] }>;
 
 const KEYS = {
   transactions: 'portfoy/transactions/v1',
@@ -9,6 +12,7 @@ const KEYS = {
   quotes: 'portfoy/quotes/v1',
   fxHistory: 'portfoy/fxHistory/v1',
   benchSeries: 'portfoy/benchSeries/v1',
+  corporateActions: 'portfoy/corporateActions/v1',
   displayCurrency: 'portfoy/displayCurrency/v1',
 } as const;
 
@@ -18,6 +22,7 @@ export interface StoredData {
   quotes: Record<string, RawQuote>;
   fxHistory: FxHistory;
   benchSeries: BenchSeries;
+  corporateActions: StoredActions;
   displayCurrency: DisplayCurrency;
 }
 
@@ -31,20 +36,23 @@ async function readJson<T>(key: string, fallback: T): Promise<T> {
 }
 
 export async function loadAll(): Promise<StoredData> {
-  const [transactions, manualPrices, quotes, fxHistory, displayCurrency, benchSeries] = await Promise.all([
-    readJson<Transaction[]>(KEYS.transactions, []),
-    readJson<Record<string, number>>(KEYS.manualPrices, {}),
-    readJson<Record<string, RawQuote>>(KEYS.quotes, {}),
-    readJson<FxHistory>(KEYS.fxHistory, {}),
-    readJson<DisplayCurrency>(KEYS.displayCurrency, 'TRY'),
-    readJson<BenchSeries>(KEYS.benchSeries, {}),
-  ]);
+  const [transactions, manualPrices, quotes, fxHistory, displayCurrency, benchSeries, corporateActions] =
+    await Promise.all([
+      readJson<Transaction[]>(KEYS.transactions, []),
+      readJson<Record<string, number>>(KEYS.manualPrices, {}),
+      readJson<Record<string, RawQuote>>(KEYS.quotes, {}),
+      readJson<FxHistory>(KEYS.fxHistory, {}),
+      readJson<DisplayCurrency>(KEYS.displayCurrency, 'TRY'),
+      readJson<BenchSeries>(KEYS.benchSeries, {}),
+      readJson<StoredActions>(KEYS.corporateActions, {}),
+    ]);
   return {
     transactions: Array.isArray(transactions) ? transactions : [],
     manualPrices,
     quotes,
     fxHistory,
     benchSeries,
+    corporateActions,
     displayCurrency: ['TRY', 'USD', 'EUR'].includes(displayCurrency) ? displayCurrency : 'TRY',
   };
 }
@@ -71,4 +79,8 @@ export function saveDisplayCurrency(currency: DisplayCurrency) {
 
 export function saveBenchSeries(series: BenchSeries) {
   return AsyncStorage.setItem(KEYS.benchSeries, JSON.stringify(series));
+}
+
+export function saveCorporateActions(actions: StoredActions) {
+  return AsyncStorage.setItem(KEYS.corporateActions, JSON.stringify(actions));
 }

@@ -12,6 +12,7 @@ import {
   formatMoney,
   formatPct,
   formatAssetPrice,
+  formatNumber,
   formatQuantity,
   formatTrDate,
   parseDecimal,
@@ -154,9 +155,18 @@ export default function AssetScreen() {
               valueColor={pnlColor(c, h.realizedPnl)}
             />
           )}
+          {h.dividends > 0 && (
+            <StatRow
+              label="Alınan temettü (net)"
+              value={formatMoney(h.dividends, h.currency, { signed: true })}
+              valueColor={c.positive}
+            />
+          )}
         </Card>
 
         {h.quantity > 0 && <CurrencyBreakdown holding={h} />}
+
+        <CorporateEvents holding={h} />
 
         <View style={styles.actions}>
           <View style={{ flex: 1 }}>
@@ -199,6 +209,51 @@ const CURRENCY_NAMES: Record<DisplayCurrency, string> = {
   USD: 'Dolar bazında',
   EUR: 'Euro bazında',
 };
+
+/** Elde tutulurken alınan temettüler ve bedelsiz/bölünmeler, yeniden eskiye. */
+function CorporateEvents({ holding: h }: { holding: Holding }) {
+  const c = useColors();
+  const rows = [
+    ...h.dividendEvents.map((d) => ({
+      date: d.date,
+      title: 'Temettü',
+      detail: `${formatQuantity(d.quantity)} pay × ${formatMoney(d.perShare, h.currency, { decimals: 4 })} (net)`,
+      value: formatMoney(d.amount, h.currency, { signed: true }),
+      color: c.positive,
+    })),
+    ...h.splitEvents.map((s) => ({
+      date: s.date,
+      title: s.split > 1 ? `Bedelsiz / bölünme %${formatNumber((s.split - 1) * 100, 0, 2)}` : 'Birleşme',
+      detail: `${formatQuantity(s.before)} → ${formatQuantity(s.after)} pay`,
+      value: `×${formatNumber(s.split, 0, 4)}`,
+      color: c.text,
+    })),
+  ].sort((a, b) => (a.date < b.date ? 1 : -1));
+  if (rows.length === 0) return null;
+  return (
+    <>
+      <SectionTitle>Temettü ve bedelsiz</SectionTitle>
+      <Card style={{ paddingVertical: 4 }}>
+        {rows.map((r, i) => (
+          <View
+            key={`${r.date}-${r.title}`}
+            style={[
+              styles.fxRow,
+              i < rows.length - 1 && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: c.border },
+            ]}>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.txMain, { color: c.text }]}>{r.title}</Text>
+              <Text style={[styles.txSub, { color: c.textSecondary }]}>
+                {formatTrDate(r.date)} · {r.detail}
+              </Text>
+            </View>
+            <Text style={[styles.txTotal, { color: r.color }]}>{r.value}</Text>
+          </View>
+        ))}
+      </Card>
+    </>
+  );
+}
 
 /** Varlığın TL, dolar ve euro bazında değeri ve kâr/zararı (alış günlerindeki kurla). */
 function CurrencyBreakdown({ holding: h }: { holding: Holding }) {

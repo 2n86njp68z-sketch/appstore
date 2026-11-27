@@ -1,4 +1,4 @@
-import type { FxSeries, RawQuote } from './types';
+import type { CorporateAction, FxSeries, RawQuote } from './types';
 
 /**
  * Fiyatlar Yahoo Finance'in herkese açık grafik uç noktasından alınır (anahtar gerektirmez).
@@ -793,4 +793,142 @@ export async function fetchAllTefasQuotes(
   fetchFn: FetchLike = fetch as unknown as FetchLike,
 ): Promise<Record<string, RawQuote>> {
   return tefasBulk(type, probe, fetchFn, new Date());
+}
+
+// ---------------------------------------------------------------------------
+// Bedelsiz/bölünme ve temettü kayıtları
+//  • BIST: İş Yatırım şirket kartının sermaye artırımı ve temettü listesi (resmi kayıtlar; temettünün
+//    stopaj sonrası net tutarı dahil)
+//  • ABD hisse ve ETF: Yahoo'nun bölünme ve temettü olayları (temettüden kaynakta %20 vergi düşülür)
+
+const ISY_ACTIONS =
+  'https://www.isyatirim.com.tr/_layouts/15/IsYatirim.Website/StockInfo/CompanyInfoAjax.aspx/GetSermayeArttirimlari';
+/** ABD temettülerinden Türkiye'de yaşayanlar için kaynakta kesilen vergi (ABD–Türkiye anlaşması). */
+export const US_DIVIDEND_WITHHOLDING = 0.2;
+/** BIST temettüsünde net tutar verilmemişse uygulanan stopaj. */
+const BIST_STOPAJ = 0.15;
+
+/** Aynı güne düşen kayıtları birleştirir: bölünmeler çarpılır, temettüler toplanır. */
+function mergeActions(list: CorporateAction[]): CorporateAction[] {
+  const byDate = new Map<string, CorporateAction>();
+  for (const a of list) {
+    const cur = byDate.get(a.date) ?? { date: a.date };
+    if (a.split) cur.split = (cur.split ?? 1) * a.split;
+    if (a.dividend) cur.dividend = (cur.dividend ?? 0) + a.dividend;
+    byDate.set(a.date, cur);
+  }
+  return [...byDate.values()].sort((a, b) => (a.date < b.date ? -1 : 1));
+}
+
+/** İş Yatırım sermaye artırımı/temettü yanıtı → bedelsiz çarpanı ve pay başına net temettü (TL). */
+export function parseIsyatirimActions(json: unknown): CorporateAction[] {
+  const d = (json as { d?: unknown })?.d;
+  let list: unknown;
+  try {
+    list = typeof d === 'string' ? JSON.parse(d) : d;
+  } catch {
+    return [];
+  }
+  if (!Array.isArray(list)) return [];
+  const out: CorporateAction[] = [];
+  for (const x of list as Record<string, unknown>[]) {
+    const ms = Number(x.SHHE_TARIH);
+    if (!(ms > Date.UTC(1990, 0, 1))) continue;
+    const date = new Date(ms).toISOString().slice(0, 10);
+    // Bedelsiz: iç kaynak + temettüden + birleşmeden bedelsiz oranları (%); bedelli ödemeli olduğu için yok sayılır.
+    const bz =
+      (Number(x.SHHE_BDSZ_IK_ORAN) || 0) + (Number(x.SHHE_BDSZ_TM_ORAN) || 0) + (Number(x.SHHE_BDSZ_BU_ORAN) || 0);
+    // Temettü oranı 1 TL nominal pay başına yüzde: %42,76 → 0,4276 TL
+    const net = Number(x.SHHE_NAKIT_TM_ORAN_NET) || 0;
+    const gross = Number(x.SHHE_NAKIT_TM_ORAN) || 0;
+    const dividend = net > 0 ? net / 100 : gross > 0 ? (gross / 100) * (1 - BIST_STOPAJ) : 0;
+    const action: CorporateAction = { date };
+    if (bz > 0) action.split = 1 + bz / 100;
+    if (dividend > 0) action.dividend = dividend;
+    if (action.split || action.dividend) out.push(action);
+  }
+  return mergeActions(out);
+}
+
+export async function fetchBistActions(
+  code: string,
+  fetchFn: FetchLike = fetch as unknown as FetchLike,
+): Promise<CorporateAction[]> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 20_000);
+  try {
+    const res = await fetchFn(ISY_ACTIONS, {
+      method: 'POST',
+      signal: controller.signal,
+      headers: { 'Content-Type': 'application/json; charset=UTF-8', Accept: 'application/json' },
+      body: JSON.stringify({
+        hisseKodu: code,
+        hisseTanimKodu: '',
+        yil: 0,
+        zaman: 'HEPSI',
+        endeksKodu: '09',
+        sektorKodu: '',
+      }),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return parseIsyatirimActions(await res.json());
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * Yahoo bölünme ve temettü olayları. Yahoo eski temettüleri sonraki bölünmelere göre küçülttüğü için
+ * tutar o günün pay sayısına geri çevrilir; kaynakta kesilen vergi düşülür.
+ */
+export function parseYahooActions(json: unknown, withholding = US_DIVIDEND_WITHHOLDING): CorporateAction[] {
+  const events = (
+    json as {
+      chart?: {
+        result?: {
+          events?: {
+            splits?: Record<string, { date?: number; numerator?: number; denominator?: number }>;
+            dividends?: Record<string, { date?: number; amount?: number }>;
+          };
+        }[];
+      };
+    }
+  )?.chart?.result?.[0]?.events;
+  if (!events) return [];
+  const day = (ts: number) => new Date(ts * 1000).toISOString().slice(0, 10);
+  const splits: CorporateAction[] = [];
+  for (const s of Object.values(events.splits ?? {})) {
+    const ratio = Number(s.numerator) / Number(s.denominator);
+    if (s.date && ratio > 0 && Number.isFinite(ratio) && ratio !== 1) splits.push({ date: day(s.date), split: ratio });
+  }
+  const out: CorporateAction[] = [...splits];
+  for (const d of Object.values(events.dividends ?? {})) {
+    const amount = Number(d.amount);
+    if (!d.date || !(amount > 0)) continue;
+    const date = day(d.date);
+    const later = splits.filter((s) => s.date > date).reduce((f, s) => f * s.split!, 1);
+    out.push({ date, dividend: amount * later * (1 - withholding) });
+  }
+  return mergeActions(out);
+}
+
+export async function fetchYahooActions(
+  symbol: string,
+  fromDate: string,
+  fetchFn: FetchLike = fetch as unknown as FetchLike,
+): Promise<CorporateAction[]> {
+  const p1 = Math.floor(Date.parse(fromDate) / 1000) - 7 * 86400;
+  const p2 = Math.floor(Date.now() / 1000) + 86400;
+  const path = `/v8/finance/chart/${encodeURIComponent(symbol)}?period1=${p1}&period2=${p2}&interval=1d&events=div%2Csplits`;
+  let lastError: unknown;
+  for (const host of HOSTS) {
+    try {
+      const res = await fetchWithTimeout(fetchFn, host + path, 20_000);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return parseYahooActions(await res.json());
+    } catch (e) {
+      lastError = e;
+    }
+  }
+  throw lastError;
 }

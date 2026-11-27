@@ -1,29 +1,34 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { AppState, Platform } from 'react-native';
 
-import { assetKey, isManualPriced } from '@/lib/assets';
+import { assetKey, isManualPriced, quoteSymbolFor } from '@/lib/assets';
 import { BENCH_SYMBOLS, computeBenchmarks, type BenchmarkResult, type BenchSeries } from '@/lib/benchmarks';
 import { computeHoldings, computeSummary, DISPLAY_CURRENCIES, requiredQuoteSymbols } from '@/lib/portfolio';
 import {
   BIST100_TR_CODE,
   fetchAnyQuotes,
+  fetchBistActions,
   fetchBistIndex,
   fetchHistory,
   fetchTurkeyCpi,
+  fetchYahooActions,
   historyRange,
   WEB_DATA_BASE,
 } from '@/lib/prices';
 import {
   loadAll,
   saveBenchSeries,
+  saveCorporateActions,
   saveDisplayCurrency,
   saveFxHistory,
   saveManualPrices,
   saveQuotes,
   saveTransactions,
+  type StoredActions,
 } from '@/lib/storage';
 import type {
   AssetKind,
+  CorporateAction,
   DisplayCurrency,
   FxHistory,
   Holding,
@@ -59,6 +64,52 @@ async function refreshFxHistory(transactions: Transaction[], current: FxHistory)
       changed = true;
     }
   });
+  return changed ? next : null;
+}
+
+const ACTIONS_TTL_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Elde tutulan BIST ve ABD hisse/ETF'lerinin bedelsiz/bölünme ve temettü kayıtlarını günde bir yeniler
+ * (BIST: İş Yatırım, ABD: Yahoo). Değişiklik yoksa null. Tarayıcı bu kaynaklara erişemediği için web
+ * sürümünde çalışmaz.
+ */
+async function refreshCorporateActions(
+  transactions: Transaction[],
+  current: StoredActions,
+): Promise<StoredActions | null> {
+  if (Platform.OS === 'web') return null;
+  const assets = new Map<string, { kind: AssetKind; symbol: string; from: string }>();
+  for (const t of transactions) {
+    if (t.kind !== 'bist' && t.kind !== 'us' && t.kind !== 'etf') continue;
+    const key = assetKey(t.kind, t.symbol);
+    const a = assets.get(key);
+    if (!a) assets.set(key, { kind: t.kind, symbol: t.symbol, from: t.date });
+    else if (t.date < a.from) a.from = t.date;
+  }
+  const stale = [...assets.entries()].filter(([key]) => {
+    const c = current[key];
+    return !c || Date.now() - c.fetchedAt > ACTIONS_TTL_MS;
+  });
+  if (stale.length === 0) return null;
+  const next: StoredActions = { ...current };
+  let changed = false;
+  for (let i = 0; i < stale.length; i += 4) {
+    const part = stale.slice(i, i + 4);
+    const settled = await Promise.allSettled(
+      part.map(([, a]) =>
+        a.kind === 'bist'
+          ? fetchBistActions(a.symbol)
+          : fetchYahooActions(quoteSymbolFor(a.kind, a.symbol) ?? a.symbol, a.from),
+      ),
+    );
+    settled.forEach((r, k) => {
+      if (r.status === 'fulfilled') {
+        next[part[k][0]] = { fetchedAt: Date.now(), actions: r.value };
+        changed = true;
+      }
+    });
+  }
   return changed ? next : null;
 }
 
@@ -131,6 +182,8 @@ interface PortfolioContextValue {
   setManualPrice: (kind: AssetKind, symbol: string, price: number) => void;
   /** Elle girilen güncel fiyatlar (anahtar: "tür:sembol"). */
   manualPrices: Record<string, number>;
+  /** Varlık anahtarına göre bedelsiz/bölünme ve temettü kayıtları. */
+  actionsByKey: Record<string, CorporateAction[]>;
 }
 
 const PortfolioContext = createContext<PortfolioContextValue | null>(null);
@@ -149,6 +202,11 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState<string>();
   const [fxHistory, setFxHistory] = useState<FxHistory>({});
   const [benchSeries, setBenchSeries] = useState<BenchSeries>({});
+  const [corporateActions, setCorporateActions] = useState<StoredActions>({});
+  const actionsRef = useRef(corporateActions);
+  useEffect(() => {
+    actionsRef.current = corporateActions;
+  }, [corporateActions]);
   const benchSeriesRef = useRef(benchSeries);
   const [displayCurrency, setDisplayCurrency] = useState<DisplayCurrency>('TRY');
   // Geri çağırmaların her zaman son değeri görmesi için; değişiklik yapan işleyiciler de bunları hemen günceller.
@@ -196,6 +254,12 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
           setFxHistory(history);
           saveFxHistory(history).catch(() => {});
         }
+        const acts = await refreshCorporateActions(transactionsRef.current, actionsRef.current).catch(() => null);
+        if (acts) {
+          actionsRef.current = acts;
+          setCorporateActions(acts);
+          saveCorporateActions(acts).catch(() => {});
+        }
         const bench = await refreshBenchSeries(transactionsRef.current, benchSeriesRef.current).catch(() => null);
         if (bench) {
           benchSeriesRef.current = bench;
@@ -224,6 +288,8 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
       fxHistoryRef.current = data.fxHistory;
       setBenchSeries(data.benchSeries);
       benchSeriesRef.current = data.benchSeries;
+      setCorporateActions(data.corporateActions);
+      actionsRef.current = data.corporateActions;
       setDisplayCurrency(data.displayCurrency);
       const times = Object.values(data.quotes).map((q) => q.fetchedAt);
       if (times.length) setLastUpdated(Math.max(...times));
@@ -292,13 +358,25 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  const actionsByKey = useMemo(
+    () => Object.fromEntries(Object.entries(corporateActions).map(([k, v]) => [k, v.actions])),
+    [corporateActions],
+  );
   const holdings = useMemo(
-    () => computeHoldings(transactions, quotes, manualPrices, fxHistory),
-    [transactions, quotes, manualPrices, fxHistory],
+    () => computeHoldings(transactions, quotes, manualPrices, fxHistory, actionsByKey),
+    [transactions, quotes, manualPrices, fxHistory, actionsByKey],
   );
   const summary = useMemo(() => computeSummary(holdings), [holdings]);
+  // Karşılaştırmada portföy değerine alınan temettüler de eklenir (ölçütler temettüler dahil).
   const benchmarks = useMemo(
-    () => computeBenchmarks(transactions, summary.totals.TRY.value, quotes, fxHistory, benchSeries),
+    () =>
+      computeBenchmarks(
+        transactions,
+        summary.totals.TRY.value + summary.totals.TRY.dividends,
+        quotes,
+        fxHistory,
+        benchSeries,
+      ),
     [transactions, summary, quotes, fxHistory, benchSeries],
   );
 
@@ -320,9 +398,11 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
       deleteTransaction,
       setManualPrice,
       manualPrices,
+      actionsByKey,
     }),
     [
       manualPrices,
+      actionsByKey,
       displayCurrency,
       cycleDisplayCurrency,
       ready,
